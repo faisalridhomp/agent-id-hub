@@ -17,9 +17,9 @@ const CONFIG = {
     chainId: 97,
     chainHex: "0x61",
     rpc: "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
-    hub: "0x14D5D6b97b7c3d22c49FC6De7667374692de5462", // AgentIDHub testnet — deployed 2026-11-18
-    badge: "0xB4C3649078556547B432a74E472e4F44F1758Fa3", // StreakBadge testnet
-    pass: "", // HubPass testnet — fills in after the v3-art testnet redeploy
+    hub: "0x5C86Bc350D5c2ae8eD8BaeBB662056F89007B82B", // AgentIDHub testnet v3 — redeployed 2026-11-18 (tiered badge art, 1000-day Diamond)
+    badge: "0x8fA9558F9ED70a526Fa9447Bd0b9e31FE3451359", // StreakBadge testnet v3
+    pass: "0xB900007a427eD68E8329cb93C5EfD933d19c71dD", // HubPass testnet v3 — tradable, deployed 2026-11-18
     explorer: "https://testnet.bscscan.com",
   },
   // Official Agent ID contract (same on mainnet; testnet uses a mock — see README).
