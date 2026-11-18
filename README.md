@@ -21,12 +21,12 @@ Built for the [Binance Agent ID Hackathon](https://www.binance.com/en/support/an
 | StreakBadge | *TBD — deployed by the hub* | Soulbound ERC-721, on-chain metadata |
 | Agent ID (official) | `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F` | SPACE ID Agent ID, ERC-721, non-transferable |
 
-Deploy gas (measured, anvil dry run): **3,451,808 gas** for both contracts.
+Deploy gas (measured, anvil dry run): **3,453,279 gas** for both contracts.
 At the live mainnet gas price of 0.05 gwei (2026-11-18) that is **≈0.00017 BNB**; at a conservative 1 gwei it is **≈0.0035 BNB**. Budget **0.01 BNB** for deploy + post-deploy smoke tests.
 
 ## Owner powers (disclosed)
 
-The owner can **only pause / unpause** check-ins and tips (emergency brake). The owner **cannot** move funds, change the Agent ID address, mint badges, or upgrade anything. There is no proxy, no token, no fee, and no yield or returns promise. Tips are explicit user-initiated payments: the tipper signs the exact transaction in their own wallet.
+The owner can **only pause / unpause tips** (emergency brake on the money path). Check-ins are deliberately unpausable so an admin action can never break live streaks. Ownership is NOT OpenZeppelin Ownable: there is no transfer and no renounce, so the owner can never brick the hub. The owner **cannot** move funds, change the Agent ID address, mint badges, or upgrade anything. There is no proxy, no token, no fee, and no yield or returns promise. Tips are explicit user-initiated payments: the tipper signs the exact transaction in their own wallet.
 
 ## How name resolution works (verified, not guessed)
 
@@ -44,7 +44,7 @@ forge test --match-contract AgentIDHubTest        # 14 unit tests (mock Agent ID
 forge test --match-contract AgentIDHubForkTest --fork-url <BSC RPC>  # 3 tests vs the REAL Agent ID contract
 ```
 
-17/17 pass (2026-11-18). Fork tests impersonate the real `jackdefi.ai` holder via `vm.prank` — no real funds move.
+20/20 pass (2026-11-18): 17 unit tests (mock Agent ID) + 3 fork tests vs the real Agent ID contract. Fork tests impersonate the real `jackdefi.ai` holder via `vm.prank` — no real funds move.
 
 ## Deploy
 
@@ -66,6 +66,9 @@ Static site in `docs/` (no build step, no backend): `index.html` + `app.js` + `c
 - Tips use checks-effects-interactions + `nonReentrant`; a recipient that rejects BNB makes the whole tip revert atomically — no funds ever stick in the hub (the hub also rejects plain BNB transfers).
 - Streak day numbers start at 1 so the uninitialized `lastCheckInDay == 0` can never collide with a real check-in day (found by unit tests, fixed before deploy).
 - Badge minting is idempotent: hitting the same milestone twice across broken streaks is a no-op, never a revert.
+- Badges use plain `_mint`, not `_safeMint`: a contract-wallet holder without an ERC-721 receiver hook could otherwise be locked out of milestone check-ins (Groq review).
+- Self-tips are rejected; `effectiveStreak()` returns the live streak (0 after a missed day) so leaderboards never rank on stale stored values (Superbot review).
+- Non-canonical handles are safe: `ownerOfHandle("JACKDEFI")` and `ownerOfHandle("jackdefi.ai")` both return `address(0)` on the real contract (verified live), so the hub reverts with `UnknownHandle` and no funds move. The frontend lowercases and strips `.ai` before calling.
 - No approvals are ever requested. No QR login. No data leaves the user's wallet except the transactions they sign.
 
 ## License

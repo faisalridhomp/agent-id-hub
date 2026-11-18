@@ -185,27 +185,50 @@ contract AgentIDHubTest is Test {
     }
 
     function testSelfTipCountsOneUniqueTipper() public {
+        // Self-tips are rejected outright (Superbot review): no point paying
+        // gas to tip yourself, and it keeps the unique-tipper count honest.
         vm.prank(alice);
+        vm.expectRevert(AgentIDHub.SelfTip.selector);
         hub.tipByName{value: 0.1 ether}("alice");
-        vm.prank(alice);
-        hub.tipByName{value: 0.2 ether}("alice");
-        (uint256 received,, uint256 unique) = hub.getTipTotals(alice);
-        assertEq(received, 0.3 ether);
-        assertEq(unique, 1); // wash-tipping cannot inflate unique count
     }
 
-    function testPauseBlocksCheckInAndTip() public {
+    function testEffectiveStreak() public {
+        vm.prank(alice);
+        hub.checkIn();
+        assertEq(hub.effectiveStreak(alice), 1);
+        vm.warp(block.timestamp + 86400);
+        assertEq(hub.effectiveStreak(alice), 1); // yesterday: still alive
+        vm.warp(block.timestamp + 86400); // missed a day
+        assertEq(hub.effectiveStreak(alice), 0);
+        assertEq(hub.getUser(alice).currentStreak, 1); // stored value is stale
+    }
+
+    function testCheckInWorksWhilePaused() public {
         hub.pause();
         vm.prank(alice);
+        hub.checkIn(); // check-ins are unpausable by design
+        assertEq(hub.getUser(alice).currentStreak, 1);
+        vm.prank(alice);
         vm.expectRevert();
-        hub.checkIn();
+        hub.tipByName{value: 0.1 ether}("bob"); // tips ARE paused
+    }
+
+    function testDeployZeroAgentIdReverts() public {
+        vm.expectRevert(AgentIDHub.ZeroAgentId.selector);
+        new AgentIDHub(address(0));
+    }
+
+    function testPauseBlocksTipOnly() public {
+        hub.pause();
+        vm.prank(alice);
+        hub.checkIn(); // check-ins stay live while paused, by design
         vm.prank(alice);
         vm.expectRevert();
         hub.tipByName{value: 0.1 ether}("bob");
         hub.unpause();
         vm.prank(alice);
-        hub.checkIn();
-        assertEq(hub.getUser(alice).currentStreak, 1);
+        hub.tipByName{value: 0.1 ether}("bob");
+        assertEq(hub.totalTippedReceived(bob), 0.1 ether);
     }
 
     function testPlainBnbTransferRejected() public {

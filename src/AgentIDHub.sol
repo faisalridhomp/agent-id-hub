@@ -56,9 +56,12 @@ contract AgentIDHub is Pausable, ReentrancyGuard {
     mapping(address => uint256) public totalTippedSent;
     /// @notice Number of distinct addresses that have ever tipped `user`.
     ///         Leaderboards rank by this first, so self-tipping cannot inflate
-    ///         a rank (wash-tipping yields at most 1 unique tipper: yourself).
+    ///         a rank (self-tips are rejected outright; a Sybil with N
+    ///         addresses can still add N tippers — inherent to any
+    ///         address-based ranking, disclosed in the README).
     mapping(address => uint256) public uniqueTipperCount;
-    /// @notice True once `tipper` has tipped `recipient` at least once.
+    /// @notice hasTipped[recipient][tipper] — true once `tipper` has tipped
+    ///         `recipient` at least once. (First index is the recipient.)
     mapping(address => mapping(address => bool)) public hasTipped;
 
     event CheckIn(address indexed user, string handle, uint32 streak, uint32 day);
@@ -69,9 +72,12 @@ contract AgentIDHub is Pausable, ReentrancyGuard {
     error AlreadyCheckedInToday();
     error UnknownHandle();
     error ZeroTip();
+    error SelfTip();
     error TipTransferFailed();
+    error ZeroAgentId();
 
     constructor(address agentId_) {
+        if (agentId_ == address(0)) revert ZeroAgentId();
         owner = msg.sender;
         agentId = IAgentID(agentId_);
         // The hub deploys its own badge so there is no circular
@@ -87,7 +93,11 @@ contract AgentIDHub is Pausable, ReentrancyGuard {
     /// @notice Check in once per UTC day. Only Agent ID holders.
     ///         Consecutive days grow the streak; a missed day resets it to 1.
     ///         Hitting a 7 / 30 / 100-day streak mints a soulbound badge.
-    function checkIn() external whenNotPaused nonReentrant {
+    ///         Deliberately NOT pausable: a pause spanning 00:00 UTC would
+    ///         break every live streak (Superbot review 2026-11-18), and
+    ///         check-ins move no funds, so there is nothing for a pause to
+    ///         protect. Only the money path (tips) can be paused.
+    function checkIn() external nonReentrant {
         if (agentId.balanceOf(msg.sender) == 0) revert NoAgentId();
         // Day numbers start at 1 (not 0): lastCheckInDay == 0 means "never
         // checked in", so a first check-in can never collide with it.
@@ -123,6 +133,7 @@ contract AgentIDHub is Pausable, ReentrancyGuard {
         if (msg.value == 0) revert ZeroTip();
         address recipient = agentId.ownerOfHandle(handle);
         if (recipient == address(0)) revert UnknownHandle();
+        if (recipient == msg.sender) revert SelfTip();
 
         // Effects first (checks-effects-interactions), then the single call.
         totalTippedSent[msg.sender] += msg.value;
@@ -142,6 +153,18 @@ contract AgentIDHub is Pausable, ReentrancyGuard {
         return users[user];
     }
 
+    /// @notice The streak that is still alive right now: 0 if the user has
+    ///         already missed a day (last check-in was before yesterday),
+    ///         else the stored current streak. `getUser` alone returns the
+    ///         stale stored value after a missed day; leaderboards must use
+    ///         this view (Superbot review 2026-11-18).
+    function effectiveStreak(address user) external view returns (uint32) {
+        UserStats storage s = users[user];
+        uint32 today = uint32(block.timestamp / DAY) + 1;
+        if (s.lastCheckInDay == 0 || s.lastCheckInDay + 1 < today) return 0;
+        return s.currentStreak;
+    }
+
     /// @notice Tipping totals for an address (for the frontend leaderboard).
     function getTipTotals(address user)
         external
@@ -151,8 +174,10 @@ contract AgentIDHub is Pausable, ReentrancyGuard {
         return (totalTippedReceived[user], totalTippedSent[user], uniqueTipperCount[user]);
     }
 
-    /// @notice Emergency pause (owner only). Disclosed owner power: pause /
-    ///         unpause ONLY. No fund movement, no address changes, no upgrades.
+    /// @notice Emergency pause (owner only). Pauses TIPS only — check-ins
+    ///         are deliberately unpausable so an admin action can never break
+    ///         live streaks. Disclosed owner power: pause / unpause ONLY.
+    ///         No fund movement, no address changes, no upgrades.
     function pause() external onlyOwner {
         _pause();
     }
