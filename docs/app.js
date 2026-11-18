@@ -370,3 +370,18 @@ if (window.ethereum) {
     } catch { /* preview is best-effort */ }
   }
 })();
+
+const copyBtn = $("copyPromptBtn");
+if (copyBtn) copyBtn.addEventListener("click", async () => {
+  const text = $("agentPrompt").textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    $("copyPromptMsg").textContent = "Copied — paste it to your AI agent.";
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); $("copyPromptMsg").textContent = "Copied — paste it to your AI agent."; }
+    catch { $("copyPromptMsg").textContent = "Copy failed — select the text manually."; }
+    ta.remove();
+  }
+});

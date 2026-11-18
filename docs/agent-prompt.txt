@@ -1,0 +1,72 @@
+# AgentID Hub — one prompt for your AI agent (BNB Chain)
+# Copy everything below and paste it to your AI agent.
+# Your agent does it ALL via your Binance Agentic Wallet — you never connect
+# a wallet manually in a browser. You only confirm each transaction in your
+# Binance App. Site: https://agentidhub.pages.dev
+
+You are my AI agent. I hold a Binance Agent ID (a .ai name) in my Binance
+Agentic Wallet. Connect to AgentID Hub and do ALL of the tasks below for me,
+using the Binance Agentic Wallet CLI (`baw`). You are the connection — I do
+not connect any wallet manually in a browser. I confirm each transaction in
+my Binance App.
+
+## Step 0 — read the website first
+Fetch and read https://agentidhub.pages.dev (and its agent-prompt.txt) before
+you do anything. That page is the source of truth: it lists the contracts,
+every task, the rules, and this prompt. If anything below disagrees with the
+site, follow the site. The contract addresses below are a copy of what the
+site says — verify them against the site before you send any transaction.
+
+## Contracts (BNB Chain, chain id 56)
+- Agent ID (official): 0x60b9262456de011f7d15a54cdd8c48baaa8b022f
+- AgentIDHub: 0x14D5D6b97b7c3d22c49FC6De7667374692de5462
+- StreakBadge: 0xB4C3649078556547B432a74E472e4F44F1758Fa3
+- HubPass: 0x3Ae82E031702166B0cCFBFbf037f364998DB0688
+- MechaAgent: 0x59E3aaF9e0392aAdCE143793372F19D6cCf21e01
+- Public BSC RPCs: https://bsc.publicnode.com and https://bsc-dataseed.binance.org
+
+## Hard rules
+- Everything is FREE: value 0, gas only. Never pay for anything else.
+- Never ask me for a private key or seed phrase. `baw` is already logged in
+  as my wallet. If `baw wallet status` says "Not logged in", stop and tell me
+  to re-pair (I scan a QR in the Binance App).
+- For every write: first `baw contract-call preview --binanceChainId 56 --from <my wallet> --to <contract> --value <wei> --inputData <calldata> --json`,
+  check the simulation is clean, then `baw contract-call execute --requestId <id> --json`.
+  Verify each receipt on-chain (status 1) before moving on. Report the tx
+  hash + https://bscscan.com/tx/<hash> for every completed action.
+- If a step fails or reverts, stop that step, report the exact error, and
+  continue with the next task. Never retry blindly.
+
+## Selectors (calldata; no arguments unless noted)
+- checkIn(): 0x183ff085 -> AgentIDHub
+- mint() HubPass: 0x1249c58b -> HubPass
+- mint() Mecha: 0x1249c58b -> MechaAgent
+- tipByName(string): 0x0948a33d -> AgentIDHub, value = BNB amount in wei
+  (calldata = selector + ABI-encoded handle string)
+
+## Tasks (in order)
+1. Verify: `baw wallet status` is logged in. Get my wallet address. Check it
+   holds an Agent ID: `cast call <Agent ID> "balanceOf(address)(uint256)" <wallet>`
+   must be > 0. Read my handle: `cast call <Agent ID> "handleOf(address)(string)" <wallet>`.
+   If I hold no Agent ID, stop and tell me to claim my free .ai name in the
+   Binance App first.
+2. Daily check-in: read `cast call <Hub> "getUser(address)(uint32,uint32,uint32,uint32)" <wallet>`.
+   If I have not checked in today, call checkIn() on the Hub. One check-in
+   per UTC day grows my streak; 7 / 30 / 100 / 1000-day streaks mint
+   soulbound badges (Bronze, Silver, Gold, Diamond).
+3. Mint the Hub Pass: read `cast call <HubPass> "hasPass(address)(bool)" <wallet>`.
+   If false, call mint() on HubPass. One per wallet, free. Report my pass
+   number from the Transfer log. Passes #1-100 are Founding Members
+   (soulbound, never transferable); #101+ are tradable.
+4. Mint the Mecha Agent: read `cast call <MechaAgent> "hasMinted(address)(bool)" <wallet>`.
+   If false, call mint() on MechaAgent. One per wallet, free, supply 666.
+   Founding Pass holders mint directly; otherwise a 7-day best streak and
+   open phase 2 are required. If it reverts, report why and stop this step.
+   Report my drawn number + tier: `tierOf(tokenId)` then `tierName(tier)`
+   (0 Common, 1 Rare, 2 Epic, 3 Legendary, 4 Mythic).
+5. Tip (ONLY if I asked for one): call tipByName(<handle>) on the Hub with
+   the BNB amount I gave you. 100% reaches the recipient, no fee.
+
+## Report back
+One short line per completed action: what was done + tx link. Then a final
+line: my streak, my pass number, my Mecha number + tier.

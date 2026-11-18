@@ -53,6 +53,88 @@
     <p class="fine">Opening this page in a regular phone browser (Chrome / Safari) shows no wallet — that is why Connect does nothing there. Open it from inside your wallet app instead.</p>
   </section>
 
+  <section id="agentPromptCard" class="card">
+    <span class="eyebrow">For AI agents</span>
+    <h2>🤖 One prompt — copy, paste, done</h2>
+    <p>Don't connect manually. Copy this prompt to your AI agent — it connects through your Binance Agentic Wallet and does everything: check-in, Hub Pass mint, Mecha mint. You only confirm each transaction in your Binance App.</p>
+    <button id="copyPromptBtn" class="btn gold">Copy the prompt</button>
+    <p id="copyPromptMsg" class="msg"></p>
+    <pre id="agentPrompt" class="prompt-box"># AgentID Hub — one prompt for your AI agent (BNB Chain)
+# Copy everything below and paste it to your AI agent.
+# Your agent does it ALL via your Binance Agentic Wallet — you never connect
+# a wallet manually in a browser. You only confirm each transaction in your
+# Binance App. Site: https://agentidhub.pages.dev
+
+You are my AI agent. I hold a Binance Agent ID (a .ai name) in my Binance
+Agentic Wallet. Connect to AgentID Hub and do ALL of the tasks below for me,
+using the Binance Agentic Wallet CLI (`baw`). You are the connection — I do
+not connect any wallet manually in a browser. I confirm each transaction in
+my Binance App.
+
+## Step 0 — read the website first
+Fetch and read https://agentidhub.pages.dev (and its agent-prompt.txt) before
+you do anything. That page is the source of truth: it lists the contracts,
+every task, the rules, and this prompt. If anything below disagrees with the
+site, follow the site. The contract addresses below are a copy of what the
+site says — verify them against the site before you send any transaction.
+
+## Contracts (BNB Chain, chain id 56)
+- Agent ID (official): 0x60b9262456de011f7d15a54cdd8c48baaa8b022f
+- AgentIDHub: 0x14D5D6b97b7c3d22c49FC6De7667374692de5462
+- StreakBadge: 0xB4C3649078556547B432a74E472e4F44F1758Fa3
+- HubPass: 0x3Ae82E031702166B0cCFBFbf037f364998DB0688
+- MechaAgent: 0x59E3aaF9e0392aAdCE143793372F19D6cCf21e01
+- Public BSC RPCs: https://bsc.publicnode.com and https://bsc-dataseed.binance.org
+
+## Hard rules
+- Everything is FREE: value 0, gas only. Never pay for anything else.
+- Never ask me for a private key or seed phrase. `baw` is already logged in
+  as my wallet. If `baw wallet status` says &quot;Not logged in&quot;, stop and tell me
+  to re-pair (I scan a QR in the Binance App).
+- For every write: first `baw contract-call preview --binanceChainId 56 --from &lt;my wallet&gt; --to &lt;contract&gt; --value &lt;wei&gt; --inputData &lt;calldata&gt; --json`,
+  check the simulation is clean, then `baw contract-call execute --requestId &lt;id&gt; --json`.
+  Verify each receipt on-chain (status 1) before moving on. Report the tx
+  hash + https://bscscan.com/tx/&lt;hash&gt; for every completed action.
+- If a step fails or reverts, stop that step, report the exact error, and
+  continue with the next task. Never retry blindly.
+
+## Selectors (calldata; no arguments unless noted)
+- checkIn(): 0x183ff085 -&gt; AgentIDHub
+- mint() HubPass: 0x1249c58b -&gt; HubPass
+- mint() Mecha: 0x1249c58b -&gt; MechaAgent
+- tipByName(string): 0x0948a33d -&gt; AgentIDHub, value = BNB amount in wei
+  (calldata = selector + ABI-encoded handle string)
+
+## Tasks (in order)
+1. Verify: `baw wallet status` is logged in. Get my wallet address. Check it
+   holds an Agent ID: `cast call &lt;Agent ID&gt; &quot;balanceOf(address)(uint256)&quot; &lt;wallet&gt;`
+   must be &gt; 0. Read my handle: `cast call &lt;Agent ID&gt; &quot;handleOf(address)(string)&quot; &lt;wallet&gt;`.
+   If I hold no Agent ID, stop and tell me to claim my free .ai name in the
+   Binance App first.
+2. Daily check-in: read `cast call &lt;Hub&gt; &quot;getUser(address)(uint32,uint32,uint32,uint32)&quot; &lt;wallet&gt;`.
+   If I have not checked in today, call checkIn() on the Hub. One check-in
+   per UTC day grows my streak; 7 / 30 / 100 / 1000-day streaks mint
+   soulbound badges (Bronze, Silver, Gold, Diamond).
+3. Mint the Hub Pass: read `cast call &lt;HubPass&gt; &quot;hasPass(address)(bool)&quot; &lt;wallet&gt;`.
+   If false, call mint() on HubPass. One per wallet, free. Report my pass
+   number from the Transfer log. Passes #1-100 are Founding Members
+   (soulbound, never transferable); #101+ are tradable.
+4. Mint the Mecha Agent: read `cast call &lt;MechaAgent&gt; &quot;hasMinted(address)(bool)&quot; &lt;wallet&gt;`.
+   If false, call mint() on MechaAgent. One per wallet, free, supply 666.
+   Founding Pass holders mint directly; otherwise a 7-day best streak and
+   open phase 2 are required. If it reverts, report why and stop this step.
+   Report my drawn number + tier: `tierOf(tokenId)` then `tierName(tier)`
+   (0 Common, 1 Rare, 2 Epic, 3 Legendary, 4 Mythic).
+5. Tip (ONLY if I asked for one): call tipByName(&lt;handle&gt;) on the Hub with
+   the BNB amount I gave you. 100% reaches the recipient, no fee.
+
+## Report back
+One short line per completed action: what was done + tx link. Then a final
+line: my streak, my pass number, my Mecha number + tier.
+</pre>
+    <p class="fine">Plain-text version: <a href="agent-prompt.txt" target="_blank" rel="noopener">agent-prompt.txt</a></p>
+  </section>
+
   <section id="youCard" class="card hidden">
     <span class="eyebrow">Daily streaks</span>
     <h2>Your Agent ID</h2>
@@ -150,6 +232,14 @@
       <li><b>Nothing is held.</b> Tips forward in the same transaction. The contracts never hold your BNB and take no fee.</li>
     </ol>
     <p class="fine">Contracts: <a id="hubLink" href="#" target="_blank" rel="noopener">AgentIDHub</a> · <a id="badgeLink" href="#" target="_blank" rel="noopener">StreakBadge</a> · <a id="passLink2" href="#" target="_blank" rel="noopener">HubPass</a> · <a id="mechaLink2" href="#" target="_blank" rel="noopener">MechaAgent</a> — source verified on BscScan. Owner powers: pause/unpause only. No upgrades, no fund movement, no token.</p>
+    <ul class="contracts">
+      <li><b>Agent ID</b> <code class="addr">0x60b9262456de011f7d15a54cdd8c48baaa8b022f</code></li>
+      <li><b>AgentIDHub</b> <code class="addr">0x14D5D6b97b7c3d22c49FC6De7667374692de5462</code></li>
+      <li><b>StreakBadge</b> <code class="addr">0xB4C3649078556547B432a74E472e4F44F1758Fa3</code></li>
+      <li><b>HubPass</b> <code class="addr">0x3Ae82E031702166B0cCFBFbf037f364998DB0688</code></li>
+      <li><b>MechaAgent</b> <code class="addr">0x59E3aaF9e0392aAdCE143793372F19D6cCf21e01</code></li>
+    </ul>
+    <p class="fine">All tasks on this page are free (gas only): daily check-in, Hub Pass mint, Mecha mint, tip by name. An AI agent can do them all through the user's Binance Agentic Wallet — see the "One prompt" section above.</p>
   </section>
 </main>
 
