@@ -153,21 +153,30 @@ contract MechaAgent is ERC721 {
         return ("#f9a8d4", "#ec4899", "#be185d");
     }
 
-    /// @notice Glow animation: the rarer the tier, the brighter the glow
-    ///         AND the faster the pulse. Common glows dim and slow (4s),
-    ///         Mythic blazes bright and fast (1.5s). The SVG carries SMIL
-    ///         <animate> tags, so marketplaces render it as a living,
-    ///         pulsing image — no GIF file needed, it is all on-chain.
+    /// @notice Glow animation: the old Mythic pulse is now the Common
+    ///         floor (1s), and each tier above pulses faster up to Mythic
+    ///         at 0.4s. Base glow brightness rises with tier too (see
+    ///         _baseGlow), so higher tiers are brighter AND faster.
     function _glowParams(uint256 tier)
         internal
         pure
         returns (string memory dur, string memory vals)
     {
-        if (tier == 0) return ("3s", "0.2;0.6;0.2");
-        if (tier == 1) return ("2.5s", "0.25;0.75;0.25");
-        if (tier == 2) return ("2s", "0.3;0.9;0.3");
-        if (tier == 3) return ("1.5s", "0.35;1;0.35");
-        return ("1s", "0.5;1;0.5");
+        if (tier == 0) return ("1s", "0.5;1;0.5");
+        if (tier == 1) return ("0.8s", "0.5;1;0.5");
+        if (tier == 2) return ("0.6s", "0.5;1;0.5");
+        if (tier == 3) return ("0.5s", "0.5;1;0.5");
+        return ("0.4s", "0.5;1;0.5");
+    }
+
+    /// @notice Base glow brightness: the old Mythic level is now the
+    ///         Common floor, and each tier above is brighter still.
+    function _baseGlow(uint256 tier) internal pure returns (string memory) {
+        if (tier == 0) return "0.5";
+        if (tier == 1) return "0.6";
+        if (tier == 2) return "0.7";
+        if (tier == 3) return "0.8";
+        return "0.9";
     }
 
     /// @notice On-chain metadata: the mecha robot portrait, recoloured per
@@ -189,6 +198,7 @@ contract MechaAgent is ERC721 {
         string memory handle = agentId.handleOf(holder);
         string memory num = _pad4(tokenId);
         (string memory dur, string memory vals) = _glowParams(tier);
+        string memory baseGlow = _baseGlow(tier);
 
         string memory svg = string.concat(
             '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">',
@@ -205,7 +215,9 @@ contract MechaAgent is ERC721 {
             '<linearGradient id="vs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0891b2"/><stop offset="0.5" stop-color="#67e8f9"/><stop offset="1" stop-color="#0891b2"/></linearGradient>',
             '<radialGradient id="gl" cx="0.5" cy="0.3" r="0.65"><stop offset="0" stop-color="',
             mid,
-            '" stop-opacity="0.5"/><stop offset="1" stop-color="',
+            '" stop-opacity="',
+            baseGlow,
+            '"/><stop offset="1" stop-color="',
             mid,
             '" stop-opacity="0"/></radialGradient>',
             '<filter id="sf" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="6"/></filter>',
