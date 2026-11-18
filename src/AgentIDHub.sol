@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IAgentID} from "./interfaces/IAgentID.sol";
@@ -21,11 +20,18 @@ import {StreakBadge} from "./StreakBadge.sol";
 ///
 ///         Owner powers (disclosed): ONLY pause/unpause. The owner cannot
 ///         move funds, cannot change the Agent ID address, cannot mint
-///         badges, and cannot upgrade anything. There is no proxy, no token,
+///         badges, and cannot upgrade anything. Ownership is deliberately
+///         NOT OpenZeppelin Ownable: there is no transferOwnership and no
+///         renounceOwnership, so the owner can never brick the hub by
+///         pausing and then renouncing (Copilot review 2026-11-18).
+///         There is no proxy, no token,
 ///         no fee, and no yield/returns promise of any kind. Tips are explicit
 ///         user-initiated payments: the tipper signs the exact transaction in
 ///         their own wallet; nothing is ever taken without confirmation.
-contract AgentIDHub is Ownable, Pausable, ReentrancyGuard {
+contract AgentIDHub is Pausable, ReentrancyGuard {
+    /// @notice The deployer. Can only pause/unpause. Cannot be transferred
+    ///         or renounced — the deployer stays the owner forever.
+    address public immutable owner;
     /// @notice The Agent ID contract (immutable).
     IAgentID public immutable agentId;
     /// @notice The soulbound streak-badge contract (immutable).
@@ -65,11 +71,17 @@ contract AgentIDHub is Ownable, Pausable, ReentrancyGuard {
     error ZeroTip();
     error TipTransferFailed();
 
-    constructor(address agentId_) Ownable(msg.sender) {
+    constructor(address agentId_) {
+        owner = msg.sender;
         agentId = IAgentID(agentId_);
         // The hub deploys its own badge so there is no circular
         // constructor dependency (badge needs the hub, hub needs the badge).
         badge = new StreakBadge(address(this));
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "AgentIDHub: not owner");
+        _;
     }
 
     /// @notice Check in once per UTC day. Only Agent ID holders.
