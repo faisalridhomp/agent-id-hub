@@ -55,11 +55,11 @@ forge script script/DeployTestnet.s.sol --rpc-url <testnet RPC> --broadcast --pr
 AGENT_ID=0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F forge script script/Deploy.s.sol --rpc-url <mainnet RPC> --broadcast --private-key $KEY
 ```
 
-Then update `frontend/config.js` with the deployed addresses and verify both contracts on BscScan (`forge verify-contract`).
+Then update `docs/config.js` with the deployed addresses and verify both contracts on BscScan (`forge verify-contract`).
 
 ## Frontend
 
-Static site in `frontend/` (no build step, no backend): `index.html` + `app.js` + `config.js` + `styles.css`. Served on GitHub Pages: https://faisalridhomp.github.io/agent-id-hub/
+Static site in `docs/` (no build step, no backend): `index.html` + `app.js` + `config.js` + `styles.css`. Served on GitHub Pages: https://faisalridhomp.github.io/agent-id-hub/
 
 ## Security notes
 
