@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentID Hub — Check in. Tip by name. Build your streak.</title>
+<meta name="description" content="AgentID Hub: daily check-in streaks, tip-by-name payments and leaderboards for Binance Agent ID holders on BNB Chain.">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand"><span class="logo">⬡</span> AgentID Hub</div>
+    <div class="head-right">
+      <span id="netBadge" class="net">BNB Chain</span>
+      <button id="connectBtn" class="btn gold">Connect Wallet</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>Your <span class="gold-text">.ai name</span> is your identity.<br>Now it does something every day.</h1>
+    <p class="sub">AgentID Hub is built for Binance Agent ID holders on BNB Chain. Check in once a day to grow your streak and earn soulbound badges. Tip anyone by their .ai name instead of a 0x address. Climb the leaderboard.</p>
+    <div class="chips">
+      <span class="chip">✓ Agent ID gated</span>
+      <span class="chip">✓ Zero fees — tips go 100% to the recipient</span>
+      <span class="chip">✓ No token, no yield promises</span>
+    </div>
+  </section>
+
+  <section id="youCard" class="card hidden">
+    <h2>Your Agent ID</h2>
+    <div class="row"><span>Wallet</span><b id="youAddr">—</b></div>
+    <div class="row"><span>Agent ID</span><b id="youHandle" class="gold-text">—</b></div>
+    <div class="row"><span>Current streak</span><b id="youStreak">—</b></div>
+    <div class="row"><span>Best streak</span><b id="youBest">—</b></div>
+    <div class="row"><span>Total check-ins</span><b id="youTotal">—</b></div>
+    <div class="row"><span>Tips received</span><b id="youReceived">—</b></div>
+    <div class="row"><span>Unique tippers</span><b id="youTippers">—</b></div>
+    <button id="checkinBtn" class="btn gold big">✓ Check in today</button>
+    <p id="checkinMsg" class="msg"></p>
+    <p class="fine">Streaks reset at 00:00 UTC. Check in once per UTC day. Milestones at 7 / 30 / 100 days mint a soulbound badge NFT.</p>
+  </section>
+
+  <section id="noIdCard" class="card hidden">
+    <h2>Agent ID required</h2>
+    <p>This hub is for Binance Agent ID holders. Your connected wallet does not hold an Agent ID yet. Claim your free <b>name.ai</b> in the Binance App (Wallet → homepage banner → Agent ID), then come back.</p>
+  </section>
+
+  <section class="card">
+    <h2>Tip by name</h2>
+    <p>Send BNB to any Agent ID holder by their name — no 0x address needed. The contract resolves the name on-chain and forwards 100% of your tip. You confirm the exact transaction in your own wallet.</p>
+    <label>Recipient handle
+      <input id="tipHandle" type="text" placeholder="jackdefi  (or jackdefi.ai)" autocomplete="off">
+    </label>
+    <label>Amount (BNB)
+      <input id="tipAmount" type="number" min="0" step="0.001" placeholder="0.01">
+    </label>
+    <div class="row"><span>Resolves to</span><b id="tipResolve">—</b></div>
+    <button id="tipBtn" class="btn gold big">Send tip</button>
+    <p id="tipMsg" class="msg"></p>
+  </section>
+
+  <section class="card">
+    <h2>🏆 Streak leaderboard</h2>
+    <p class="fine">Top streaks from on-chain check-ins. Ranked by best streak, then total check-ins.</p>
+    <table id="streakBoard"><thead><tr><th>#</th><th>Agent ID</th><th>Best streak</th><th>Current</th><th>Check-ins</th></tr></thead><tbody><tr><td colspan="5">Loading…</td></tr></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>💛 Top tipped</h2>
+    <p class="fine">Ranked by number of unique tippers first, then total BNB received — so tipping yourself cannot buy a rank.</p>
+    <table id="tipBoard"><thead><tr><th>#</th><th>Agent ID</th><th>Unique tippers</th><th>Total received (BNB)</th></tr></thead><tbody><tr><td colspan="4">Loading…</td></tr></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>How it works</h2>
+    <ol class="how">
+      <li><b>Agent ID is the gate.</b> The contracts call <code>balanceOf()</code> on the official Agent ID contract (<code>0x60B9…022F</code>) — only holders can check in.</li>
+      <li><b>Names resolve on-chain.</b> Tips call <code>ownerOfHandle()</code> on the same contract. Unknown names revert and no funds move.</li>
+      <li><b>Badges are soulbound.</b> 7 / 30 / 100-day streaks mint a non-transferable badge NFT, like the Agent ID itself.</li>
+      <li><b>Nothing is held.</b> Tips forward in the same transaction. The contracts never hold your BNB and take no fee.</li>
+    </ol>
+    <p class="fine">Contracts: <a id="hubLink" href="#" target="_blank" rel="noopener">AgentIDHub</a> · <a id="badgeLink" href="#" target="_blank" rel="noopener">StreakBadge</a> — source verified on BscScan. Owner powers: pause/unpause only. No upgrades, no fund movement, no token.</p>
+  </section>
+</main>
+
+<footer><div class="wrap">
+  <p>AgentID Hub — built for the Binance Agent ID Hackathon. Not affiliated with Binance. Agent ID is a product of Binance Wallet / SPACE ID.</p>
+  <p class="fine">Crypto assets are volatile. Never share your seed phrase or private key with anyone — this site will never ask for them.</p>
+</div></footer>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
