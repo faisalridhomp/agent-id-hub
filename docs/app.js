@@ -34,7 +34,10 @@ const MECHA_ABI = [
 ];
 
 let provider, signer, userAddr, net, hub, agentId, pass, mecha;
-let deployBlock = 0;
+// Hub deploy block (mainnet v3, tx 0x4b3a9d…): leaderboards scan events
+// from here, so early check-ins/tips never fall out of the window.
+const HUB_DEPLOY_BLOCK = 134337199;
+let deployBlock = HUB_DEPLOY_BLOCK;
 
 const $ = (id) => document.getElementById(id);
 const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
@@ -57,6 +60,9 @@ async function connect() {
     provider = new ethers.BrowserProvider(window.ethereum);
     const netInfo = await provider.getNetwork();
     net = Number(netInfo.chainId) === 97 ? CONFIG.testnet : CONFIG.mainnet;
+    // Testnet hub deployed 2026-11-18 (recent) — the 200k-block fallback
+    // window covers it; mainnet uses the real deploy block.
+    deployBlock = net.chainId === 56 ? HUB_DEPLOY_BLOCK : 0;
     if (Number(netInfo.chainId) !== net.chainId) {
       await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: net.chainHex }] });
     }
@@ -181,7 +187,10 @@ async function loadMecha() {
     }
     if (hint === "Not minted yet") {
       const s = await hub.getUser(userAddr);
-      if (Number(s.bestStreak) >= 7) hint = "Eligible — 7-day streak ✓";
+      const totalMinted = await mecha.totalMinted();
+      const p2 = await mecha.phase2Open();
+      if (Number(s.bestStreak) >= 7 && p2) hint = "Eligible — 7-day streak ✓";
+      else if (Number(s.bestStreak) >= 7) hint = "Phase 2 not open yet — opens at 100 Mecha mints (" + String(totalMinted) + "/100) or Nov 25";
       else hint = "Needs a 7-day best streak (or a Founding Pass)";
     }
   } catch { /* hint is best-effort */ }

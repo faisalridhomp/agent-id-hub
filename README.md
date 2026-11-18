@@ -9,20 +9,24 @@ Built for the [Binance Agent ID Hackathon](https://www.binance.com/en/support/an
 | Feature | How Agent ID is used |
 |---|---|
 | **Daily check-in streaks** | Only addresses holding an Agent ID (`balanceOf > 0` on `0x60B9…022F`) can check in once per UTC day. Consecutive days grow the streak; a missed day resets it. |
-| **Soulbound streak badges** | 7 / 30 / 100-day streaks mint a non-transferable ERC-721 badge (same soulbound idea as Agent ID itself). |
+| **Soulbound streak badges** | 7 / 30 / 100 / 1000-day streaks mint a non-transferable ERC-721 badge (same soulbound idea as Agent ID itself). Tiers: Bronze, Silver, Gold, Diamond. |
 | **Tip by name** | Send BNB to `jackdefi` instead of a `0x` address. The contract resolves the name on-chain via `ownerOfHandle()` and forwards **100%** of the tip. Zero fee. |
+| **Hub Pass** | Free membership pass, one per Agent ID holder. Passes #1–100 are Founding Members (soulbound); #101+ are tradable. |
+| **Mecha Agent** | Free random-tier robot collectible, supply 666. One mint draw decides tier (Common 300 / Rare 200 / Epic 100 / Legendary 50 / Mythic 16) and number #0001–#0666. Founding Pass holders mint directly; everyone else needs a 7-day best streak and open phase 2. |
+| **Agent-driven login** | No manual wallet connect needed: the user tells their AI agent to connect, and the agent executes check-in / mint / tip through the Binance Agentic Wallet (`baw`). The site ships a one-prompt README for AI agents (`docs/agent-prompt.txt`). No QR login, no session storage. |
 | **Leaderboards** | Top streaks and top tipped, computed from on-chain events. Tipping ranks by **unique tippers first**, so self-tipping cannot buy a rank. |
 
 ## Contracts
 
 | Contract | Address (BSC mainnet) | Notes |
 |---|---|---|
-| AgentIDHub | *TBD — deploy pending funding* | Deploys its own StreakBadge in the constructor |
-| StreakBadge | *TBD — deployed by the hub* | Soulbound ERC-721, on-chain metadata |
+| AgentIDHub | `0x14D5D6b97b7c3d22c49FC6De7667374692de5462` | v3, deployed 2026-11-18, tx `0x4b3a9db29113c7acd988cc10561e367ed4197ba42fa978a2a5a9a6121c62bcef`, verified on BscScan + Sourcify |
+| StreakBadge | `0xB4C3649078556547B432a74E472e4F44F1758Fa3` | v3, deployed by the hub in the same tx; tiered art, 1000-day Diamond |
+| HubPass | `0x3Ae82E031702166B0cCFBFbf037f364998DB0688` | Deployed 2026-11-18, tx `0x30657d9e64a5958ad10b3c9064eb0b329355d716ccf06000c41273a85495246d`, verified; Founding 1–100 soulbound, Member 101+ tradable |
+| MechaAgent | `0x59E3aaF9e0392aAdCE143793372F19D6cCf21e01` | Deployed 2026-11-18, tx `0xe1033409baadaa38c73f08d88db81ffcc61be7a7b3b30544f389daffb5bf854e`, verified; supply 666, random tier + number |
 | Agent ID (official) | `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F` | SPACE ID Agent ID, ERC-721, non-transferable |
 
-Deploy gas (measured, anvil dry run): **3,453,279 gas** for both contracts.
-At the live mainnet gas price of 0.05 gwei (2026-11-18) that is **≈0.00017 BNB**; at a conservative 1 gwei it is **≈0.0035 BNB**. Budget **0.01 BNB** for deploy + post-deploy smoke tests.
+Live traction (checked 2026-11-19 morning, on-chain): **109 Hub Passes** and **53 Mechas** minted by real users within ~8 hours of the mainnet launch.
 
 ## Owner powers (disclosed)
 
@@ -46,6 +50,8 @@ forge test --match-contract AgentIDHubForkTest --fork-url <BSC RPC>  # 3 tests v
 
 20/20 pass (2026-11-18): 17 unit tests (mock Agent ID) + 3 fork tests vs the real Agent ID contract. Fork tests impersonate the real `jackdefi.ai` holder via `vm.prank` — no real funds move.
 
+Full suite now **37/37 pass** (29 pre-Mecha + 8 MechaAgent, incl. a full 666-mint run verifying exact tier caps 300/200/100/50/16 and unique numbers 1–666).
+
 ## Deploy
 
 ```bash
@@ -60,6 +66,8 @@ Then update `docs/config.js` with the deployed addresses and verify both contrac
 ## Frontend
 
 Static site in `docs/` (no build step, no backend): `index.html` + `app.js` + `config.js` + `styles.css`. Primary URL (Cloudflare Pages): https://agentidhub.pages.dev/ — GitHub Pages backup: https://faisalridhomp.github.io/agent-id-hub/
+
+The site also ships a one-prompt README for AI agents (`docs/agent-prompt.txt`, with a copy button on the page): an agent reads the site, then executes check-in / mint / tip through the user's Binance Agentic Wallet — one copy-paste, all tasks done.
 
 ## Security notes
 
