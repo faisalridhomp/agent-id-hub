@@ -186,6 +186,7 @@ async function loadMecha() {
 }
 
 async function doMintMecha() {
+  if (!signer) { await connect(); return; }
   if (!mecha) return;
   $("mechaMsg").textContent = "Confirm the mint in your wallet — free, gas only. Your tier and number are drawn at random…";
   try {
@@ -209,6 +210,7 @@ async function doMintMecha() {
 }
 
 async function doMintPass() {
+  if (!signer) { await connect(); return; }
   if (!pass) return;
   $("passMsg").textContent = "Confirm the mint in your wallet — free, gas only…";
   try {
@@ -223,6 +225,7 @@ async function doMintPass() {
 }
 
 async function doCheckIn() {
+  if (!signer) { await connect(); return; }
   $("checkinMsg").textContent = "Confirm the check-in in your wallet…";
   try {
     const tx = await hub.checkIn();
@@ -245,6 +248,7 @@ async function resolveTip() {
 }
 
 async function doTip() {
+  if (!signer) { await connect(); return; }
   const h = normHandle($("tipHandle").value);
   const amt = $("tipAmount").value;
   if (!h) { $("tipMsg").textContent = "Enter a handle first."; return; }
@@ -325,7 +329,9 @@ if (window.ethereum) {
   window.ethereum.on("accountsChanged", () => location.reload());
   window.ethereum.on("chainChanged", () => location.reload());
 }
-// Read-only leaderboard preview without a wallet (mainnet only, if deployed).
+// Read-only public preview without a wallet (mainnet only, if deployed):
+// contract links, live totals and mint buttons work before connect;
+// the mint/check-in/tip buttons ask to connect the wallet first.
 (async () => {
   if (CONFIG.mainnet.hub) {
     try {
@@ -333,6 +339,27 @@ if (window.ethereum) {
       net = CONFIG.mainnet;
       hub = new ethers.Contract(CONFIG.mainnet.hub, HUB_ABI, provider);
       agentId = new ethers.Contract(CONFIG.agentIdMainnet, AGENT_ID_ABI, provider);
+      $("hubLink").href = net.explorer + "/address/" + net.hub;
+      $("badgeLink").href = net.explorer + "/address/" + (net.badge || (await hub.badge()));
+      if (net.pass) {
+        pass = new ethers.Contract(net.pass, PASS_ABI, provider);
+        $("passLink").href = net.explorer + "/address/" + net.pass;
+        $("passLink2").href = net.explorer + "/address/" + net.pass;
+        $("passCard").classList.remove("hidden");
+        $("passTotal").textContent = String(await pass.totalMinted());
+        $("passStatus").textContent = "Connect wallet to mint";
+        $("mintPassBtn").disabled = false;
+        $("mintPassBtn").textContent = "Connect wallet to mint";
+      }
+      if (net.mecha) {
+        mecha = new ethers.Contract(net.mecha, MECHA_ABI, provider);
+        $("mechaLink").href = net.explorer + "/address/" + net.mecha;
+        $("mechaLink2").href = net.explorer + "/address/" + net.mecha;
+        $("mechaTotal").textContent = String(await mecha.totalMinted()) + " / 666";
+        $("mechaStatus").textContent = "Connect wallet to mint";
+        $("mintMechaBtn").disabled = false;
+        $("mintMechaBtn").textContent = "Connect wallet to mint";
+      }
       await loadBoards();
     } catch { /* preview is best-effort */ }
   }
