@@ -21,18 +21,29 @@
 
 <main class="wrap">
   <section class="hero">
-    <h1>Your <span class="gold-text">.ai name</span> is your identity.<br>Now it does something every day.</h1>
-    <p class="sub">AgentID Hub is built for Binance Agent ID holders on BNB Chain. Check in once a day to grow your streak and earn soulbound badges. Mint a free Hub Pass — the first 100 are Founding Members. Tip anyone by their .ai name instead of a 0x address. Climb the leaderboard. And mint a free Mecha Agent — a random-tier robot collectible, only 666 ever.</p>
-    <div class="chips">
-      <span class="chip">✓ Agent ID gated</span>
-      <span class="chip">✓ Zero fees — tips go 100% to the recipient</span>
-      <span class="chip">✓ Free Hub Pass — first 100 Founding (soulbound), then tradable</span>
-      <span class="chip">🤖 Free Mecha Agent NFT — random tier, supply 666</span>
-      <span class="chip">✓ No token, no yield promises</span>
+    <div>
+      <span class="eyebrow">Live on BNB Chain · Agent ID gated</span>
+      <h1>Your <span class="grad-text">.ai name</span> is your identity.<br>Now it does something every day.</h1>
+      <p class="sub">AgentID Hub is built for Binance Agent ID holders on BNB Chain. Check in once a day to grow your streak and earn soulbound badges. Mint a free Hub Pass — the first 100 are Founding Members. Tip anyone by their .ai name instead of a 0x address. And mint a free Mecha Agent — a random-tier robot collectible, only 666 ever.</p>
+      <div class="hero-cta">
+        <a href="#mechaCard" class="btn">🤖 Mint your free Mecha</a>
+        <a href="#youCard" class="btn ghost">✓ Check in today</a>
+      </div>
+      <div class="hero-stats">
+        <div><b>666</b><span>Mecha supply</span></div>
+        <div><b>5</b><span>Rarity tiers</span></div>
+        <div><b>100%</b><span>Tips reach recipient</span></div>
+        <div><b>0</b><span>Fees, ever</span></div>
+      </div>
+    </div>
+    <div class="hero-art">
+      <img src="img/mecha-mythic.png" alt="Mecha Agent — Mythic tier robot">
+      <span class="hero-badge">MYTHIC · 1 of 16</span>
     </div>
   </section>
 
   <section id="youCard" class="card hidden">
+    <span class="eyebrow">Daily streaks</span>
     <h2>Your Agent ID</h2>
     <div class="row"><span>Wallet</span><b id="youAddr">—</b></div>
     <div class="row"><span>Agent ID</span><b id="youHandle" class="gold-text">—</b></div>
@@ -47,6 +58,7 @@
   </section>
 
   <section id="passCard" class="card hidden">
+    <span class="eyebrow">Membership</span>
     <h2>🎫 Hub Pass</h2>
     <p>Free membership pass for Agent ID holders — one per wallet, gas only. The first 100 mints are <b>Founding Members</b> — soulbound, proof you were early, they can never be transferred. Passes from #101 are <b>tradable</b>: keep it for status or sell it. The pass always shows its current holder's handle.</p>
     <div class="row"><span>Total minted</span><b id="passTotal">—</b></div>
@@ -57,6 +69,7 @@
   </section>
 
   <section id="mechaCard" class="card">
+    <span class="eyebrow">Collectible · Supply 666</span>
     <h2>🤖 Mecha Agent</h2>
     <p>A free robot collectible for the hub — <b>only 666 ever</b>, one per wallet, gas only, tradable. One mint draw decides <b>both</b> your tier and your number (#0001–#0666, each used once). The art is animated on-chain: the visor, antenna, core and halo pulse — the rarer the tier, the brighter and faster the glow.</p>
     <div class="mecha-strip">
@@ -86,6 +99,7 @@
   </section>
 
   <section class="card">
+    <span class="eyebrow">Payments</span>
     <h2>Tip by name</h2>
     <p>Send BNB to any Agent ID holder by their name — no 0x address needed. The contract resolves the name on-chain and forwards 100% of your tip. You confirm the exact transaction in your own wallet.</p>
     <label>Recipient handle
@@ -100,18 +114,21 @@
   </section>
 
   <section class="card">
+    <span class="eyebrow">Leaderboards</span>
     <h2>🏆 Streak leaderboard</h2>
     <p class="fine">Top streaks from on-chain check-ins. Ranked by best streak, then total check-ins.</p>
     <table id="streakBoard"><thead><tr><th>#</th><th>Agent ID</th><th>Best streak</th><th>Current</th><th>Check-ins</th></tr></thead><tbody><tr><td colspan="5">Loading…</td></tr></tbody></table>
   </section>
 
   <section class="card">
+    <span class="eyebrow">Leaderboards</span>
     <h2>💛 Top tipped</h2>
     <p class="fine">Ranked by number of unique tippers first, then total BNB received — so tipping yourself cannot buy a rank.</p>
     <table id="tipBoard"><thead><tr><th>#</th><th>Agent ID</th><th>Unique tippers</th><th>Total received (BNB)</th></tr></thead><tbody><tr><td colspan="4">Loading…</td></tr></tbody></table>
   </section>
 
   <section class="card">
+    <span class="eyebrow">Trust</span>
     <h2>How it works</h2>
     <ol class="how">
       <li><b>Agent ID is the gate.</b> The contracts call <code>balanceOf()</code> on the official Agent ID contract (<code>0x60B9…022F</code>) — only holders can check in.</li>
