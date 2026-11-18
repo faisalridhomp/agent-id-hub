@@ -39,7 +39,12 @@ contract StreakBadge is ERC721 {
         }
         uint256 tokenId = uint256(keccak256(abi.encodePacked(holder, milestone)));
         if (_ownerOf(tokenId) != address(0)) return false;
-        _safeMint(holder, tokenId);
+        // Plain _mint (not _safeMint): the badge is soulbound and the
+        // recipient is a verified Agent ID holder. _safeMint would call
+        // onERC721Received on contract wallets and a recipient without that
+        // hook would revert the whole check-in on milestone days (Groq
+        // review 2026-11-18). No receiver check is needed here.
+        _mint(holder, tokenId);
         return true;
     }
 
