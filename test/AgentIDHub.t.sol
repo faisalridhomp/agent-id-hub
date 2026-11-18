@@ -54,11 +54,20 @@ contract AgentIDHubTest is Test {
     address bob = makeAddr("bob"); // holds "bob"
     address carol = makeAddr("carol"); // holds NO Agent ID
 
+    // Warped clock mirror: block.timestamp reads go stale under via-IR
+    // (optimizer caches TIMESTAMP across vm.warp), so tests track time here.
+    uint256 private _now;
+    function _warpDays(uint256 d) internal {
+        _now += d * 86400;
+        vm.warp(_now);
+    }
+
     function setUp() public {
         agentId = new MockAgentID();
         // The hub deploys its own badge in the constructor.
         hub = new AgentIDHub(address(agentId));
         badge = hub.badge();
+        _now = block.timestamp;
         agentId.giveId(alice, "alice");
         agentId.giveId(bob, "bob");
         vm.deal(alice, 10 ether);
@@ -92,7 +101,7 @@ contract AgentIDHubTest is Test {
     function testStreakGrowsAcrossDays() public {
         vm.prank(alice);
         hub.checkIn();
-        vm.warp(block.timestamp + 86400);
+        _warpDays(1);
         vm.prank(alice);
         hub.checkIn();
         assertEq(hub.getUser(alice).currentStreak, 2);
@@ -101,11 +110,11 @@ contract AgentIDHubTest is Test {
     function testMissedDayResetsStreak() public {
         vm.prank(alice);
         hub.checkIn();
-        vm.warp(block.timestamp + 86400);
+        _warpDays(1);
         vm.prank(alice);
         hub.checkIn();
         assertEq(hub.getUser(alice).currentStreak, 2);
-        vm.warp(block.timestamp + 2 * 86400); // skip a day
+        _warpDays(2); // skip a day
         vm.prank(alice);
         hub.checkIn();
         AgentIDHub.UserStats memory s = hub.getUser(alice);
@@ -113,11 +122,25 @@ contract AgentIDHubTest is Test {
         assertEq(s.bestStreak, 2);
     }
 
+    function testBadgeAt1000DaysIsDiamond() public {
+        for (uint256 i = 0; i < 1000; i++) {
+            vm.prank(alice);
+            hub.checkIn();
+            _warpDays(1);
+        }
+        uint256 tokenId = uint256(keccak256(abi.encodePacked(alice, uint32(1000))));
+        assertEq(badge.ownerOf(tokenId), alice);
+        // Diamond tier: 1000-day badge exists, lower tiers also minted along the way.
+        assertEq(badge.ownerOf(uint256(keccak256(abi.encodePacked(alice, uint32(100))))), alice);
+        assertEq(badge.ownerOf(uint256(keccak256(abi.encodePacked(alice, uint32(30))))), alice);
+        assertEq(badge.ownerOf(uint256(keccak256(abi.encodePacked(alice, uint32(7))))), alice);
+    }
+
     function testBadgeAt7DaysAndSoulbound() public {
         for (uint256 i = 0; i < 7; i++) {
             vm.prank(alice);
             hub.checkIn();
-            vm.warp(block.timestamp + 86400);
+            _warpDays(1);
         }
         uint256 tokenId = uint256(keccak256(abi.encodePacked(alice, uint32(7))));
         assertEq(badge.ownerOf(tokenId), alice);
@@ -135,13 +158,13 @@ contract AgentIDHubTest is Test {
         for (uint256 i = 0; i < 7; i++) {
             vm.prank(alice);
             hub.checkIn();
-            vm.warp(block.timestamp + 86400);
+            _warpDays(1);
         }
-        vm.warp(block.timestamp + 2 * 86400); // break streak
+        _warpDays(2); // break streak
         for (uint256 i = 0; i < 7; i++) {
             vm.prank(alice);
             hub.checkIn();
-            vm.warp(block.timestamp + 86400);
+            _warpDays(1);
         }
         assertEq(hub.getUser(alice).totalCheckIns, 14);
     }
@@ -196,9 +219,9 @@ contract AgentIDHubTest is Test {
         vm.prank(alice);
         hub.checkIn();
         assertEq(hub.effectiveStreak(alice), 1);
-        vm.warp(block.timestamp + 86400);
+        _warpDays(1);
         assertEq(hub.effectiveStreak(alice), 1); // yesterday: still alive
-        vm.warp(block.timestamp + 86400); // missed a day
+        _warpDays(1); // missed a day
         assertEq(hub.effectiveStreak(alice), 0);
         assertEq(hub.getUser(alice).currentStreak, 1); // stored value is stale
     }

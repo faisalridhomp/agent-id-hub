@@ -82,7 +82,7 @@ contract AgentIDHub is Pausable, ReentrancyGuard {
         agentId = IAgentID(agentId_);
         // The hub deploys its own badge so there is no circular
         // constructor dependency (badge needs the hub, hub needs the badge).
-        badge = new StreakBadge(address(this));
+        badge = new StreakBadge(address(this), address(agentId));
     }
 
     modifier onlyOwner() {
@@ -114,7 +114,7 @@ contract AgentIDHub is Pausable, ReentrancyGuard {
         string memory handle = agentId.handleOf(msg.sender);
         emit CheckIn(msg.sender, handle, streak, day);
 
-        if (streak == 7 || streak == 30 || streak == 100) {
+        if (streak == 7 || streak == 30 || streak == 100 || streak == 1000) {
             // mintBadge is a no-op (returns false) if the badge already exists,
             // so a repeated milestone across broken streaks never reverts.
             if (badge.mintBadge(msg.sender, streak)) {

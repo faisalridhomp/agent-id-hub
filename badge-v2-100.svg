@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+<defs>
+<linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8e08a"/><stop offset="0.5" stop-color="#f0b90b"/><stop offset="1" stop-color="#a67c00"/></linearGradient>
+<linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a2036"/><stop offset="1" stop-color="#0b0e1a"/></linearGradient>
+<radialGradient id="glow" cx="0.5" cy="0.25" r="0.6"><stop offset="0" stop-color="#f0b90b" stop-opacity="0.30"/><stop offset="1" stop-color="#f0b90b" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="400" height="400" fill="#070912"/>
+<rect width="400" height="400" fill="url(#glow)"/>
+<circle cx="52" cy="348" r="1.5" fill="#f0b90b" opacity="0.5"/><circle cx="352" cy="52" r="1.5" fill="#f0b90b" opacity="0.5"/><circle cx="368" cy="330" r="1.5" fill="#f0b90b" opacity="0.35"/><circle cx="36" cy="66" r="1.5" fill="#f0b90b" opacity="0.35"/>
+<rect x="28" y="28" width="344" height="344" rx="22" fill="url(#card)" stroke="url(#metal)" stroke-width="2"/>
+<polygon points="28,120 120,28 160,28 28,160" fill="#ffffff" opacity="0.03"/>
+<polygon points="330,340 360,323 360,357 330,372" fill="none" stroke="#f0b90b" stroke-width="1" opacity="0.10"/>
+<polygon points="52,330 72,319 72,341 52,352" fill="none" stroke="#f0b90b" stroke-width="1" opacity="0.10"/>
+<text x="52" y="70" font-size="13" letter-spacing="3" fill="#f0b90b" font-family="sans-serif" font-weight="bold">AGENTID HUB</text>
+<text x="348" y="70" font-size="12" fill="#8a8f98" text-anchor="end" font-family="sans-serif">STREAK BADGE</text>
+<text x="200" y="196" font-size="110" text-anchor="middle" fill="#ffffff" opacity="0.05" font-family="sans-serif" font-weight="bold">100</text>
+<polygon points="200,102 247,129 247,183 200,210 153,183 153,129" fill="none" stroke="url(#metal)" stroke-width="2.5"/>
+<polygon points="200,118 233,137 233,175 200,194 167,175 167,137" fill="#f0b90b" opacity="0.12"/>
+<text x="200" y="172" font-size="32" text-anchor="middle" fill="#f0b90b" font-family="sans-serif" font-weight="bold">100</text>
+<text x="200" y="254" font-size="30" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-weight="bold" letter-spacing="1">100 DAY STREAK</text>
+<text x="200" y="280" font-size="12" letter-spacing="4" text-anchor="middle" fill="#f0b90b" font-family="sans-serif" font-weight="bold">GOLD</text>
+<line x1="70" y1="298" x2="330" y2="298" stroke="#2a2f45" stroke-width="1"/>
+<text x="52" y="328" font-size="20" fill="#ffffff" font-family="sans-serif" font-weight="bold">jackdefi.ai</text>
+<text x="348" y="328" font-size="12" fill="#8a8f98" text-anchor="end" font-family="sans-serif">SOULBOUND</text>
+<text x="200" y="356" font-size="9" letter-spacing="2" text-anchor="middle" fill="#5a6076" font-family="sans-serif">STREAK BADGE &#183; NON-TRANSFERABLE</text>
+</svg>

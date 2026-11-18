@@ -11,6 +11,12 @@ const HUB_ABI = [
   "event CheckIn(address indexed user, string handle, uint32 streak, uint32 day)",
   "event Tip(address indexed from, string handle, address indexed to, uint256 amount)",
 ];
+const PASS_ABI = [
+  "function mint() returns (uint256)",
+  "function hasPass(address) view returns (bool)",
+  "function passOf(address) view returns (uint256)",
+  "function totalMinted() view returns (uint256)",
+];
 const AGENT_ID_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function handleOf(address) view returns (string)",
@@ -18,7 +24,7 @@ const AGENT_ID_ABI = [
   "function isValidHandle(string) view returns (bool)",
 ];
 
-let provider, signer, userAddr, net, hub, agentId;
+let provider, signer, userAddr, net, hub, agentId, pass;
 let deployBlock = 0;
 
 const $ = (id) => document.getElementById(id);
@@ -59,7 +65,13 @@ async function connect() {
       net.chainId === 56 ? CONFIG.agentIdMainnet : await hub.agentId(), AGENT_ID_ABI, provider);
     $("hubLink").href = net.explorer + "/address/" + hubAddr;
     $("badgeLink").href = net.explorer + "/address/" + (net.badge || (await hub.badge()));
+    if (net.pass) {
+      pass = new ethers.Contract(net.pass, PASS_ABI, signer);
+      $("passLink").href = net.explorer + "/address/" + net.pass;
+      $("passLink2").href = net.explorer + "/address/" + net.pass;
+    }
     await loadYou();
+    await loadPass();
     await loadBoards();
   } catch (e) {
     console.error(e);
@@ -86,6 +98,51 @@ async function loadYou() {
   const t = await hub.getTipTotals(userAddr);
   $("youReceived").textContent = fmtBnb(t.received) + " BNB";
   $("youTippers").textContent = t.uniqueTippers;
+}
+
+async function loadPass() {
+  const card = $("passCard");
+  if (!$("noIdCard").classList.contains("hidden")) {
+    // No Agent ID held — the pass requires one, same as check-ins.
+    card.classList.add("hidden");
+    return;
+  }
+  if (!pass) {
+    // Pass not deployed on this network yet — show the card in "soon" state.
+    card.classList.remove("hidden");
+    $("passTotal").textContent = "—";
+    $("passStatus").textContent = "Deploying soon";
+    $("mintPassBtn").disabled = true;
+    $("mintPassBtn").textContent = "Hub Pass — coming soon";
+    return;
+  }
+  card.classList.remove("hidden");
+  $("passTotal").textContent = String(await pass.totalMinted());
+  const has = await pass.hasPass(userAddr);
+  if (has) {
+    const id = await pass.passOf(userAddr);
+    $("passStatus").textContent = "You own pass #" + String(id).padStart(4, "0");
+    $("mintPassBtn").classList.add("hidden");
+  } else {
+    $("passStatus").textContent = "Not minted yet";
+    $("mintPassBtn").classList.remove("hidden");
+    $("mintPassBtn").disabled = false;
+    $("mintPassBtn").textContent = "Mint your free pass";
+  }
+}
+
+async function doMintPass() {
+  if (!pass) return;
+  $("passMsg").textContent = "Confirm the mint in your wallet — free, gas only…";
+  try {
+    const tx = await pass.mint();
+    $("passMsg").textContent = "Mint sent: " + tx.hash + " — waiting for confirmation…";
+    await tx.wait();
+    $("passMsg").textContent = "✓ Pass minted! Welcome to the hub.";
+    await loadPass();
+  } catch (e) {
+    $("passMsg").textContent = "Mint failed: " + (e?.info?.error?.message || e?.reason || e.message || e);
+  }
 }
 
 async function doCheckIn() {
@@ -183,6 +240,7 @@ function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 
 $("connectBtn").addEventListener("click", connect);
 $("checkinBtn").addEventListener("click", doCheckIn);
+$("mintPassBtn").addEventListener("click", doMintPass);
 $("tipBtn").addEventListener("click", doTip);
 $("tipHandle").addEventListener("input", resolveTip);
 if (window.ethereum) {
