@@ -163,11 +163,11 @@ contract MechaAgent is ERC721 {
         pure
         returns (string memory dur, string memory vals)
     {
-        if (tier == 0) return ("4s", "0.15;0.35;0.15");
-        if (tier == 1) return ("3s", "0.2;0.5;0.2");
-        if (tier == 2) return ("2.5s", "0.25;0.65;0.25");
-        if (tier == 3) return ("2s", "0.3;0.8;0.3");
-        return ("1.5s", "0.4;1;0.4");
+        if (tier == 0) return ("3s", "0.2;0.6;0.2");
+        if (tier == 1) return ("2.5s", "0.25;0.75;0.25");
+        if (tier == 2) return ("2s", "0.3;0.9;0.3");
+        if (tier == 3) return ("1.5s", "0.35;1;0.35");
+        return ("1s", "0.5;1;0.5");
     }
 
     /// @notice On-chain metadata: the mecha robot portrait, recoloured per
@@ -193,7 +193,7 @@ contract MechaAgent is ERC721 {
         string memory svg = string.concat(
             '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">',
             '<defs>',
-            '<linearGradient id="ch" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2f5f8"/><stop offset="0.45" stop-color="#c3ccd4"/><stop offset="0.75" stop-color="#7d8894"/><stop offset="1" stop-color="#4a5560"/></linearGradient>',
+            '<linearGradient id="ch" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.45" stop-color="#d5dde4"/><stop offset="0.75" stop-color="#8b98a5"/><stop offset="1" stop-color="#5b6670"/></linearGradient>',
             '<linearGradient id="cd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8b98a5"/><stop offset="1" stop-color="#3a4550"/></linearGradient>',
             '<linearGradient id="gd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="',
             light,
@@ -205,7 +205,7 @@ contract MechaAgent is ERC721 {
             '<linearGradient id="vs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0891b2"/><stop offset="0.5" stop-color="#67e8f9"/><stop offset="1" stop-color="#0891b2"/></linearGradient>',
             '<radialGradient id="gl" cx="0.5" cy="0.3" r="0.65"><stop offset="0" stop-color="',
             mid,
-            '" stop-opacity="0.28"/><stop offset="1" stop-color="',
+            '" stop-opacity="0.5"/><stop offset="1" stop-color="',
             mid,
             '" stop-opacity="0"/></radialGradient>',
             '<filter id="sf" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="6"/></filter>',
@@ -215,6 +215,13 @@ contract MechaAgent is ERC721 {
             '" dur="',
             dur,
             '" repeatCount="indefinite"/></rect>',
+            '<circle cx="200" cy="195" r="138" fill="none" stroke="',
+            mid,
+            '" stroke-width="2" opacity="0.35"><animate attributeName="opacity" values="',
+            vals,
+            '" dur="',
+            dur,
+            '" repeatCount="indefinite"/></circle>',
             '<g stroke="',
             mid,
             '" stroke-width="1" opacity="0.12"><line x1="40" y1="60" x2="360" y2="60"/><line x1="40" y1="340" x2="360" y2="340"/><line x1="60" y1="40" x2="60" y2="360"/><line x1="340" y1="40" x2="340" y2="360"/></g>',
@@ -227,7 +234,9 @@ contract MechaAgent is ERC721 {
             '" opacity="0.35"/><circle cx="340" cy="340" r="2" fill="',
             mid,
             '" opacity="0.35"/>',
-            '<rect x="10" y="10" width="380" height="380" rx="20" fill="none" stroke="url(#gd)" stroke-width="2"/>',
+            '<rect x="10" y="10" width="380" height="380" rx="20" fill="none" stroke="url(#gd)" stroke-width="2.5"><animate attributeName="opacity" values="0.6;1;0.6" dur="',
+            dur,
+            '" repeatCount="indefinite"/></rect>',
             '<text x="30" y="38" font-size="11" letter-spacing="3" fill="',
             mid,
             '" font-family="sans-serif" font-weight="bold">AGENTID HUB</text>',
@@ -236,7 +245,7 @@ contract MechaAgent is ERC721 {
             '</text>',
             '<line x1="200" y1="58" x2="200" y2="88" stroke="#c3ccd4" stroke-width="3"/>',
             '<circle cx="200" cy="54" r="6" fill="#67e8f9"/>',
-            '<circle cx="200" cy="54" r="11" fill="#22d3ee" opacity="0.35" filter="url(#sf)"><animate attributeName="opacity" values="',
+            '<circle cx="200" cy="54" r="11" fill="#22d3ee" opacity="0.55" filter="url(#sf)"><animate attributeName="opacity" values="',
             vals,
             '" dur="',
             dur,
@@ -245,7 +254,7 @@ contract MechaAgent is ERC721 {
             '<polygon points="200,78 258,100 272,148 262,214 238,250 162,250 138,214 128,148 142,100" fill="none" stroke="url(#gd)" stroke-width="1.5" opacity="0.85"/>',
             '<polygon points="150,96 250,96 258,118 142,118" fill="#0b0e1a" opacity="0.55"/>',
             '<polygon points="200,78 226,86 214,96 186,96 174,86" fill="url(#gd)" opacity="0.9"/>',
-            '<rect x="148" y="146" width="104" height="26" rx="12" fill="#22d3ee" opacity="0.35" filter="url(#sf)"><animate attributeName="opacity" values="',
+            '<rect x="148" y="146" width="104" height="26" rx="12" fill="#22d3ee" opacity="0.55" filter="url(#sf)"><animate attributeName="opacity" values="',
             vals,
             '" dur="',
             dur,
@@ -280,7 +289,7 @@ contract MechaAgent is ERC721 {
             '"/>',
             '<circle cx="200" cy="338" r="16" fill="',
             mid,
-            '" opacity="0.25" filter="url(#sf)"><animate attributeName="opacity" values="',
+            '" opacity="0.45" filter="url(#sf)"><animate attributeName="opacity" values="',
             vals,
             '" dur="',
             dur,
