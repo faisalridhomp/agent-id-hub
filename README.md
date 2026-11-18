@@ -59,7 +59,7 @@ Then update `docs/config.js` with the deployed addresses and verify both contrac
 
 ## Frontend
 
-Static site in `docs/` (no build step, no backend): `index.html` + `app.js` + `config.js` + `styles.css`. Served on GitHub Pages: https://faisalridhomp.github.io/agent-id-hub/
+Static site in `docs/` (no build step, no backend): `index.html` + `app.js` + `config.js` + `styles.css`. Primary URL (Cloudflare Pages): https://agentidhub.pages.dev/ — GitHub Pages backup: https://faisalridhomp.github.io/agent-id-hub/
 
 ## Security notes
 

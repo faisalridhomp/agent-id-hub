@@ -4,7 +4,7 @@
 **AgentID Hub**
 
 ## Website
-https://faisalridhomp.github.io/agent-id-hub/
+https://agentidhub.pages.dev/ (Cloudflare Pages, primary — GitHub Pages backup: https://faisalridhomp.github.io/agent-id-hub/)
 
 ## Repository (open source)
 https://github.com/faisalridhomp/agent-id-hub
