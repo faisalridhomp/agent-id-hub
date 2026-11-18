@@ -47,7 +47,12 @@ function normHandle(raw) {
 }
 
 async function connect() {
-  if (!window.ethereum) { alert("No wallet found. Install MetaMask or Binance Wallet first."); return; }
+  if (!window.ethereum) {
+    $("loginCard").classList.remove("hidden");
+    $("loginCard").scrollIntoView({ behavior: "smooth", block: "center" });
+    alert("No wallet detected in this browser. Open this site from inside the Binance App (built-in browser) or the MetaMask app, then tap Connect Wallet.");
+    return;
+  }
   try {
     provider = new ethers.BrowserProvider(window.ethereum);
     const netInfo = await provider.getNetwork();
@@ -59,6 +64,7 @@ async function connect() {
     signer = await provider.getSigner();
     userAddr = await signer.getAddress();
     $("connectBtn").textContent = short(userAddr);
+    $("loginCard").classList.add("hidden");
     $("netBadge").textContent = net.chainId === 56 ? "BNB Chain Mainnet" : "BSC Testnet";
     const hubAddr = net.hub;
     if (!hubAddr) {
