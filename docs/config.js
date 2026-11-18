@@ -10,6 +10,7 @@ const CONFIG = {
     hub: "0xb2d0eBBA5518b874a49e449996b66805f9a93D0f", // AgentIDHub mainnet — deployed 2026-11-18, tx 0xb87a7821daa941896d488c8909f9991438ecbdcd8b8b2ad8954197d5c361bb42
     badge: "0xEd3df65F05091b5629D71CC8D5D1993E2DD7CB42", // StreakBadge mainnet
     pass: "", // HubPass mainnet — deploys only on Faisal's word (under review)
+    mecha: "", // MechaAgent mainnet — deploys only on Faisal's word (under review)
     explorer: "https://bscscan.com",
   },
   // BSC testnet (chain 97) — update after testnet deploy:

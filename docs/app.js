@@ -23,8 +23,17 @@ const AGENT_ID_ABI = [
   "function ownerOfHandle(string) view returns (address)",
   "function isValidHandle(string) view returns (bool)",
 ];
+const MECHA_ABI = [
+  "function mint() returns (uint256 tokenId, uint256 tier)",
+  "function hasMinted(address) view returns (bool)",
+  "function totalMinted() view returns (uint256)",
+  "function tierOf(uint256) view returns (uint256)",
+  "function tierName(uint256) view returns (string)",
+  "function phase2Open() view returns (bool)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+];
 
-let provider, signer, userAddr, net, hub, agentId, pass;
+let provider, signer, userAddr, net, hub, agentId, pass, mecha;
 let deployBlock = 0;
 
 const $ = (id) => document.getElementById(id);
@@ -70,8 +79,14 @@ async function connect() {
       $("passLink").href = net.explorer + "/address/" + net.pass;
       $("passLink2").href = net.explorer + "/address/" + net.pass;
     }
+    if (net.mecha) {
+      mecha = new ethers.Contract(net.mecha, MECHA_ABI, signer);
+      $("mechaLink").href = net.explorer + "/address/" + net.mecha;
+      $("mechaLink2").href = net.explorer + "/address/" + net.mecha;
+    }
     await loadYou();
     await loadPass();
+    await loadMecha();
     await loadBoards();
   } catch (e) {
     console.error(e);
@@ -128,6 +143,68 @@ async function loadPass() {
     $("mintPassBtn").classList.remove("hidden");
     $("mintPassBtn").disabled = false;
     $("mintPassBtn").textContent = "Mint your free pass";
+  }
+}
+
+async function loadMecha() {
+  const card = $("mechaCard");
+  if (!$("noIdCard").classList.contains("hidden")) {
+    card.classList.add("hidden");
+    return;
+  }
+  card.classList.remove("hidden");
+  if (!mecha) {
+    $("mechaTotal").textContent = "—";
+    $("mechaStatus").textContent = "Deploying soon";
+    $("mintMechaBtn").disabled = true;
+    $("mintMechaBtn").textContent = "Mecha Agent — coming soon";
+    return;
+  }
+  $("mechaTotal").textContent = String(await mecha.totalMinted()) + " / 666";
+  if (await mecha.hasMinted(userAddr)) {
+    $("mechaStatus").textContent = "Minted ✓ (1 per wallet)";
+    $("mintMechaBtn").classList.add("hidden");
+    return;
+  }
+  // Eligibility hint (the contract is the final judge and reverts clearly).
+  let hint = "Not minted yet";
+  try {
+    if (pass) {
+      const pid = await pass.passOf(userAddr);
+      if (pid >= 1n && pid <= 100n) hint = "Founding — you can mint now, no streak needed";
+    }
+    if (hint === "Not minted yet") {
+      const s = await hub.getUser(userAddr);
+      if (Number(s.bestStreak) >= 7) hint = "Eligible — 7-day streak ✓";
+      else hint = "Needs a 7-day best streak (or a Founding Pass)";
+    }
+  } catch { /* hint is best-effort */ }
+  $("mechaStatus").textContent = hint;
+  $("mintMechaBtn").classList.remove("hidden");
+  $("mintMechaBtn").disabled = false;
+  $("mintMechaBtn").textContent = "Mint your free Mecha";
+}
+
+async function doMintMecha() {
+  if (!mecha) return;
+  $("mechaMsg").textContent = "Confirm the mint in your wallet — free, gas only. Your tier and number are drawn at random…";
+  try {
+    const tx = await mecha.mint();
+    $("mechaMsg").textContent = "Mint sent: " + tx.hash + " — waiting for confirmation…";
+    const rc = await tx.wait();
+    let detail = "";
+    try {
+      const log = rc.logs.find((l) => {
+        try { return mecha.interface.parseLog(l)?.name === "Transfer"; } catch { return false; }
+      });
+      const tokenId = Number(mecha.interface.parseLog(log).args.tokenId);
+      const tier = await mecha.tierName(await mecha.tierOf(tokenId));
+      detail = " You drew Mecha #" + String(tokenId).padStart(4, "0") + " — " + tier + " tier!";
+    } catch { /* detail is best-effort */ }
+    $("mechaMsg").textContent = "✓ Mecha minted!" + detail;
+    await loadMecha();
+  } catch (e) {
+    $("mechaMsg").textContent = "Mint failed: " + (e?.info?.error?.message || e?.reason || e.message || e);
   }
 }
 
@@ -241,6 +318,7 @@ function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 $("connectBtn").addEventListener("click", connect);
 $("checkinBtn").addEventListener("click", doCheckIn);
 $("mintPassBtn").addEventListener("click", doMintPass);
+$("mintMechaBtn").addEventListener("click", doMintMecha);
 $("tipBtn").addEventListener("click", doTip);
 $("tipHandle").addEventListener("input", resolveTip);
 if (window.ethereum) {

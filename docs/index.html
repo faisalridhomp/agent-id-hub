@@ -22,11 +22,12 @@
 <main class="wrap">
   <section class="hero">
     <h1>Your <span class="gold-text">.ai name</span> is your identity.<br>Now it does something every day.</h1>
-    <p class="sub">AgentID Hub is built for Binance Agent ID holders on BNB Chain. Check in once a day to grow your streak and earn soulbound badges. Mint a free Hub Pass — the first 100 are Founding Members. Tip anyone by their .ai name instead of a 0x address. Climb the leaderboard.</p>
+    <p class="sub">AgentID Hub is built for Binance Agent ID holders on BNB Chain. Check in once a day to grow your streak and earn soulbound badges. Mint a free Hub Pass — the first 100 are Founding Members. Tip anyone by their .ai name instead of a 0x address. Climb the leaderboard. And mint a free Mecha Agent — a random-tier robot collectible, only 666 ever.</p>
     <div class="chips">
       <span class="chip">✓ Agent ID gated</span>
       <span class="chip">✓ Zero fees — tips go 100% to the recipient</span>
-      <span class="chip">✓ Free Hub Pass — tradable membership NFT</span>
+      <span class="chip">✓ Free Hub Pass — first 100 Founding (soulbound), then tradable</span>
+      <span class="chip">🤖 Free Mecha Agent NFT — random tier, supply 666</span>
       <span class="chip">✓ No token, no yield promises</span>
     </div>
   </section>
@@ -47,12 +48,36 @@
 
   <section id="passCard" class="card hidden">
     <h2>🎫 Hub Pass</h2>
-    <p>Free membership pass for Agent ID holders — one per wallet, gas only. The first 100 mints are <b>Founding Members</b>. Tradable: keep it for status or sell it. The pass always shows its current holder's handle.</p>
+    <p>Free membership pass for Agent ID holders — one per wallet, gas only. The first 100 mints are <b>Founding Members</b> — soulbound, proof you were early, they can never be transferred. Passes from #101 are <b>tradable</b>: keep it for status or sell it. The pass always shows its current holder's handle.</p>
     <div class="row"><span>Total minted</span><b id="passTotal">—</b></div>
     <div class="row"><span>Your pass</span><b id="passStatus">—</b></div>
     <button id="mintPassBtn" class="btn gold big">Mint your free pass</button>
     <p id="passMsg" class="msg"></p>
     <p class="fine">No fee, no supply cap. The pass is a separate ERC-721 contract — <a id="passLink" href="#" target="_blank" rel="noopener">view on BscScan</a>.</p>
+  </section>
+
+  <section id="mechaCard" class="card">
+    <h2>🤖 Mecha Agent</h2>
+    <p>A free robot collectible for the hub — <b>only 666 ever</b>, one per wallet, gas only, tradable. One mint draw decides <b>both</b> your tier and your number (#0001–#0666, each used once). The art is animated on-chain: the visor, antenna, core and halo pulse — the rarer the tier, the brighter and faster the glow.</p>
+    <div class="mecha-strip">
+      <figure><img src="img/mecha-common.png" alt="Mecha Agent — Common"><figcaption>Common · 300</figcaption></figure>
+      <figure><img src="img/mecha-rare.png" alt="Mecha Agent — Rare"><figcaption>Rare · 200</figcaption></figure>
+      <figure><img src="img/mecha-epic.png" alt="Mecha Agent — Epic"><figcaption>Epic · 100</figcaption></figure>
+      <figure><img src="img/mecha-legendary.png" alt="Mecha Agent — Legendary"><figcaption>Legendary · 50</figcaption></figure>
+      <figure><img src="img/mecha-mythic.png" alt="Mecha Agent — Mythic"><figcaption>Mythic · 16</figcaption></figure>
+    </div>
+    <table class="tiers"><thead><tr><th>Tier</th><th>Supply</th><th>Chance</th><th>Glow</th></tr></thead><tbody>
+      <tr><td class="t-common">Common</td><td>300</td><td>~45%</td><td>1s pulse</td></tr>
+      <tr><td class="t-rare">Rare</td><td>200</td><td>~30%</td><td>0.8s pulse</td></tr>
+      <tr><td class="t-epic">Epic</td><td>100</td><td>~15%</td><td>0.6s pulse</td></tr>
+      <tr><td class="t-legendary">Legendary</td><td>50</td><td>~7.5%</td><td>0.5s pulse</td></tr>
+      <tr><td class="t-mythic">Mythic</td><td>16</td><td>~2.4%</td><td>0.4s pulse</td></tr>
+    </tbody></table>
+    <div class="row"><span>Total minted</span><b id="mechaTotal">—</b></div>
+    <div class="row"><span>Your Mecha</span><b id="mechaStatus">—</b></div>
+    <button id="mintMechaBtn" class="btn gold big">Mint your free Mecha</button>
+    <p id="mechaMsg" class="msg"></p>
+    <p class="fine">Who can mint: <b>Founding Pass holders (pass #1–100) mint directly</b>, no streak needed. Everyone else needs a <b>7-day best streak</b> and phase 2 open (100 Founding mints done, or 7 days after deploy). One mint per wallet, forever — minting then transferring the NFT away still cannot mint again. The Mecha is a separate ERC-721 contract — <a id="mechaLink" href="#" target="_blank" rel="noopener">view on BscScan</a>.</p>
   </section>
 
   <section id="noIdCard" class="card hidden">
@@ -92,10 +117,11 @@
       <li><b>Agent ID is the gate.</b> The contracts call <code>balanceOf()</code> on the official Agent ID contract (<code>0x60B9…022F</code>) — only holders can check in.</li>
       <li><b>Names resolve on-chain.</b> Tips call <code>ownerOfHandle()</code> on the same contract. Unknown names revert and no funds move.</li>
       <li><b>Badges are soulbound.</b> 7 / 30 / 100 / 1000-day streaks mint a non-transferable badge NFT — Bronze, Silver, Gold, Diamond — like the Agent ID itself.</li>
-      <li><b>Hub Pass is free and tradable.</b> One free mint per Agent ID holder, gas only. First 100 mints are Founding Members. Hold it for status or sell it — the pass always shows its current holder's handle.</li>
+      <li><b>Hub Pass is free.</b> One free mint per Agent ID holder, gas only. The first 100 mints are Founding Members — soulbound, they can never be transferred. Passes from #101 are tradable: hold one for status or sell it — the pass always shows its current holder's handle.</li>
+      <li><b>Mecha Agent is a free random collectible.</b> Supply 666, one per wallet, gas only, tradable. A single mint draw decides your tier (Common 300 / Rare 200 / Epic 100 / Legendary 50 / Mythic 16) and your number (#0001–#0666). Founding Pass holders mint directly; everyone else needs a 7-day best streak. One mint per wallet forever.</li>
       <li><b>Nothing is held.</b> Tips forward in the same transaction. The contracts never hold your BNB and take no fee.</li>
     </ol>
-    <p class="fine">Contracts: <a id="hubLink" href="#" target="_blank" rel="noopener">AgentIDHub</a> · <a id="badgeLink" href="#" target="_blank" rel="noopener">StreakBadge</a> · <a id="passLink2" href="#" target="_blank" rel="noopener">HubPass</a> — source verified on BscScan. Owner powers: pause/unpause only. No upgrades, no fund movement, no token.</p>
+    <p class="fine">Contracts: <a id="hubLink" href="#" target="_blank" rel="noopener">AgentIDHub</a> · <a id="badgeLink" href="#" target="_blank" rel="noopener">StreakBadge</a> · <a id="passLink2" href="#" target="_blank" rel="noopener">HubPass</a> · <a id="mechaLink2" href="#" target="_blank" rel="noopener">MechaAgent</a> — source verified on BscScan. Owner powers: pause/unpause only. No upgrades, no fund movement, no token.</p>
   </section>
 </main>
 

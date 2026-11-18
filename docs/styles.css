@@ -30,7 +30,16 @@ input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(-
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 600; }
-.how li { margin-bottom: 8px; }
+.mecha-strip { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.mecha-strip figure { margin: 0; flex: 1 1 140px; min-width: 120px; }
+.mecha-strip img { width: 100%; border-radius: 12px; border: 1px solid var(--line); display: block; }
+.mecha-strip figcaption { text-align: center; font-size: 12px; color: var(--muted); padding-top: 4px; }
+.tiers td { font-size: 14px; }
+.t-common { color: #9ca3af; font-weight: 700; }
+.t-rare { color: #3b82f6; font-weight: 700; }
+.t-epic { color: #a855f7; font-weight: 700; }
+.t-legendary { color: #f0b90b; font-weight: 700; }
+.t-mythic { color: #ec4899; font-weight: 700; }
 code { background: #0b0e1a; padding: 2px 6px; border-radius: 6px; font-size: 13px; }
 a { color: var(--gold); }
 footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--muted); font-size: 13px; }
