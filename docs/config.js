@@ -1,6 +1,5 @@
 // AgentID Hub — network + contract configuration.
-// MAINNET ADDRESSES ARE FILLED IN AFTER THE MAINNET DEPLOYMENT.
-// Until then the site runs in "coming soon" mode on mainnet and fully on testnet.
+// Mainnet v3 is LIVE (deployed 2026-11-18): Hub + Badge + HubPass + MechaAgent.
 const CONFIG = {
   // BSC mainnet (chain 56) — v3 live 2026-11-18 ~22:40 WIB:
   mainnet: {
