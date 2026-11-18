@@ -6,14 +6,16 @@ import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {IAgentID} from "./interfaces/IAgentID.sol";
 
-/// @title HubPass — free tradable membership pass for AgentID Hub
-/// @notice One free mint per Agent ID holder (gas only). TRADABLE: hold it
-///         for status (first 100 mints are Founding Members) or sell it on
-///         any marketplace — the pass always shows its current holder's
-///         handle. Minting is itself an on-chain Agent ID interaction, so
-///         every mint grows the hub activity the hackathon ranks on. No fee,
-///         no supply cap, no owner powers at all — the contract cannot be
-///         paused, upgraded, or changed after deploy.
+/// @title HubPass — free membership pass for AgentID Hub
+/// @notice One free mint per Agent ID holder (gas only). Two tiers:
+///         FOUNDING (first 100 mints) is SOULBOUND — it proves you were
+///         early and cannot be bought or sold. MEMBER (mint 101+) is
+///         TRADABLE — hold it for status or sell it. The pass always shows
+///         its current holder's handle. Minting is itself an on-chain Agent
+///         ID interaction, so every mint grows the hub activity the
+///         hackathon ranks on. No fee, no supply cap, no owner powers at
+///         all — the contract cannot be paused, upgraded, or changed
+///         after deploy.
 contract HubPass is ERC721 {
     using Strings for uint256;
 
@@ -57,9 +59,23 @@ contract HubPass is ERC721 {
         return passOf[holder] != 0;
     }
 
-    /// @notice Tradable by design (unlike the soulbound streak badges):
-    ///         the pass is a free-mint membership NFT the holder can keep
-    ///         or sell. No transfer restrictions — standard ERC-721.
+    /// @notice Founding passes (tokenId <= 100) are SOULBOUND — they prove
+    ///         early membership and cannot be transferred. Member passes
+    ///         (tokenId > 100) are freely tradable. Only minting (from == 0)
+    ///         and burning (to == 0) bypass the check. OpenZeppelin v5
+    ///         routes all mint/transfer/burn through _update.
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override
+        returns (address)
+    {
+        address from = _ownerOf(tokenId);
+        if (from != address(0) && to != address(0) && tokenId <= 100) {
+            revert("HubPass: founding pass is soulbound");
+        }
+        return super._update(to, tokenId, auth);
+    }
+
     /// @notice On-chain metadata: premium member-card SVG (gold border,
     ///         hexagon AI emblem, chip, ghost member number, tier label),
     ///         name, description, holder + handle + tier traits.
@@ -70,6 +86,7 @@ contract HubPass is ERC721 {
         require(holder != address(0), "HubPass: nonexistent token");
         string memory handle = agentId.handleOf(holder);
         string memory tier = tokenId <= 100 ? "FOUNDING MEMBER" : "MEMBER";
+        string memory transfer = tokenId <= 100 ? "SOULBOUND" : "TRADABLE";
         string memory num = _pad4(tokenId);
         string memory ghost = _pad2(tokenId);
         string memory svg = string.concat(
@@ -109,7 +126,9 @@ contract HubPass is ERC721 {
             '<text x="348" y="328" font-size="14" fill="#f0b90b" text-anchor="end" font-family="monospace">#',
             num,
             '</text>',
-            '<text x="200" y="356" font-size="9" letter-spacing="2" text-anchor="middle" fill="#5a6076" font-family="sans-serif">ONE PER WALLET &#183; TRADABLE &#183; FREE MINT</text>',
+            '<text x="200" y="356" font-size="9" letter-spacing="2" text-anchor="middle" fill="#5a6076" font-family="sans-serif">ONE PER WALLET &#183; ',
+            transfer,
+            ' &#183; FREE MINT</text>',
             '</svg>'
         );
         string memory json = Base64.encode(
@@ -117,7 +136,7 @@ contract HubPass is ERC721 {
                 string.concat(
                     '{"name":"AgentID Hub Pass - ',
                     handle,
-                    '.ai","description":"Membership pass for AgentID Hub. Free mint, one per Binance Agent ID holder. Tradable - hold it for status or sell it. First 100 mints are Founding Members.","attributes":[{"trait_type":"Holder","value":"',
+                    '.ai","description":"Membership pass for AgentID Hub. Free mint, one per Binance Agent ID holder. Founding Member passes (first 100 mints) are soulbound and non-transferable; Member passes are tradable - hold it for status or sell it.","attributes":[{"trait_type":"Holder","value":"',
                     Strings.toHexString(holder),
                     '"},{"trait_type":"Handle","value":"',
                     handle,

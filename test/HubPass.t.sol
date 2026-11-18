@@ -54,14 +54,32 @@ contract HubPassTest is Test {
         pass.mint();
     }
 
-    function testPassIsTradable() public {
+    function testFoundingPassIsSoulbound() public {
         vm.prank(alice);
-        pass.mint();
+        pass.mint(); // token 1 = Founding
         vm.prank(alice);
+        vm.expectRevert("HubPass: founding pass is soulbound");
         pass.transferFrom(alice, bob, 1);
-        assertEq(pass.ownerOf(1), bob);
-        assertEq(pass.passOf(alice), 1); // passOf tracks the original minter's token id
-        assertEq(pass.balanceOf(bob), 1);
+    }
+
+    function testMemberPassIsTradable() public {
+        // Mint 101 passes: tokens 1-100 Founding, token 101 Member.
+        for (uint256 i = 0; i < 101; i++) {
+            address h = address(uint160(uint256(keccak256(abi.encodePacked("holder", i)))));
+            agentId.giveId(h, string.concat("holder", vm.toString(i)));
+            vm.prank(h);
+            pass.mint();
+        }
+        assertEq(pass.totalMinted(), 101);
+        address holder100 = address(uint160(uint256(keccak256(abi.encodePacked("holder", uint256(100))))));
+        vm.prank(holder100);
+        pass.transferFrom(holder100, bob, 101); // Member pass transfers freely
+        assertEq(pass.ownerOf(101), bob);
+        // ...but the Founding pass (token 1) still cannot move.
+        address holder0 = address(uint160(uint256(keccak256(abi.encodePacked("holder", uint256(0))))));
+        vm.prank(holder0);
+        vm.expectRevert("HubPass: founding pass is soulbound");
+        pass.transferFrom(holder0, bob, 1);
     }
 
     function testTokenUriIsDataUri() public {
