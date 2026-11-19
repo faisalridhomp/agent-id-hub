@@ -6,6 +6,14 @@ const CONFIG = {
     chainId: 56,
     chainHex: "0x38",
     rpc: "https://bsc-dataseed.binance.org",
+    // Fallback RPCs for eth_getLogs only (audit M-10): the main RPC
+    // rate-limits wide log ranges, so log pages try these in order.
+    logsRpcs: [
+      "https://bsc.publicnode.com",
+      "https://binance.llamarpc.com",
+      "https://bsc.drpc.org",
+      "https://1rpc.io/bnb",
+    ],
     hub: "0x14D5D6b97b7c3d22c49FC6De7667374692de5462", // AgentIDHub mainnet v3 — redeployed 2026-11-18, tx 0x4b3a9db29113c7acd988cc10561e367ed4197ba42fa978a2a5a9a6121c62bcef (tiered badge art, 1000-day Diamond; supersedes v1 0xb2d0…)
     badge: "0xB4C3649078556547B432a74E472e4F44F1758Fa3", // StreakBadge mainnet v3
     pass: "0x3Ae82E031702166B0cCFBFbf037f364998DB0688", // HubPass mainnet — Founding (1–100) soulbound, Member (101+) tradable, tx 0x30657d9e64a5958ad10b3c9064eb0b329355d716ccf06000c41273a85495246d

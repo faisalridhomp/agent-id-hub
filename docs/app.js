@@ -43,7 +43,17 @@ let deployBlock = HUB_DEPLOY_BLOCK;
 
 const $ = (id) => document.getElementById(id);
 const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "—";
-const fmtBnb = (w) => Number(ethers.formatEther(w)).toFixed(4);
+// L-11: format from bigint, never through Number — dust amounts (< 0.0001 BNB)
+// used to render as "0.0000" and big totals lost precision past 2^53 wei.
+const fmtBnb = (w) => {
+  const v = typeof w === "bigint" ? w : BigInt(w);
+  if (v === 0n) return "0";
+  if (v < 10n ** 14n) return "<0.0001";
+  const s = ethers.formatEther(v);
+  const [int, dec = ""] = s.split(".");
+  const d4 = dec.slice(0, 4).replace(/0+$/, "");
+  return d4 ? int + "." + d4 : int;
+};
 
 function normHandle(raw) {
   let h = (raw || "").trim().toLowerCase();
@@ -62,8 +72,9 @@ async function connect() {
     provider = new ethers.BrowserProvider(window.ethereum);
     const netInfo = await provider.getNetwork();
     net = Number(netInfo.chainId) === 97 ? CONFIG.testnet : CONFIG.mainnet;
-    // Testnet hub deployed 2026-11-18 (recent) — the 200k-block fallback
-    // window covers it; mainnet uses the real deploy block.
+    // Testnet hub deployed 2026-11-18 (recent); mainnet uses the real
+    // deploy block. Logs are scanned forward from deployBlock in pages
+    // (see fetchLogsPaged) — no 200k-block window anymore.
     deployBlock = net.chainId === 56 ? HUB_DEPLOY_BLOCK : 0;
     if (Number(netInfo.chainId) !== net.chainId) {
       await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: net.chainHex }] });
@@ -286,27 +297,37 @@ async function loadBoards() {
   if (!hub) { setBoardEmpty(); return; }
   try {
     const current = await provider.getBlockNumber();
-    const from = Math.max(deployBlock, current - 200000);
-    const [checkIns, tips] = await Promise.all([
-      hub.queryFilter(hub.filters.CheckIn, from, current),
-      hub.queryFilter(hub.filters.Tip, from, current),
+    const [ci, tp] = await Promise.all([
+      fetchLogsPaged(hub, hub.filters.CheckIn, "CheckIn", deployBlock, current),
+      fetchLogsPaged(hub, hub.filters.Tip, "Tip", deployBlock, current),
     ]);
-    // Streak board: latest state per user, ranked by best streak.
-    const users = new Map();
+    const checkIns = ci.logs, tips = tp.logs;
+    const logsOk = ci.complete && tp.complete;
+    if (!checkIns.length && !tips.length && !logsOk) {
+      setBoardError();
+      return;
+    }
+    // Per-user aggregates from events alone (fallback if the getUser batch fails).
+    const agg = new Map();
     for (const ev of checkIns) {
       const u = ev.args.user.toLowerCase();
-      users.set(u, { handle: ev.args.handle, streak: Number(ev.args.streak), day: Number(ev.args.day) });
+      const a = agg.get(u) || { handle: ev.args.handle, best: 0, total: 0, cur: 0, day: 0 };
+      a.total++;
+      a.best = Math.max(a.best, Number(ev.args.streak));
+      if (Number(ev.args.day) >= a.day) { a.day = Number(ev.args.day); a.cur = Number(ev.args.streak); }
+      agg.set(u, a);
     }
-    const streakRows = [];
-    for (const [addr, v] of users) {
-      const s = await hub.getUser(addr);
-      streakRows.push({ handle: v.handle, best: Number(s.bestStreak), cur: Number(s.currentStreak), total: Number(s.totalCheckIns) });
-    }
+    let states = new Map();
+    try { states = await batchGetUsers([...agg.keys()]); } catch { /* event aggregates stand in */ }
+    const streakRows = [...agg.entries()].map(([addr, v]) => {
+      const s = states.get(addr);
+      return { handle: v.handle, best: s ? s.best : v.best, cur: s ? s.cur : v.cur, total: s ? s.total : v.total };
+    });
     streakRows.sort((a, b) => b.best - a.best || b.total - a.total);
     renderBoard("streakBoard", streakRows.slice(0, 20).map((r, i) =>
       `<tr><td>${i + 1}</td><td>${esc(r.handle)}.ai</td><td>${r.best}</td><td>${r.cur}</td><td>${r.total}</td></tr>`),
       "No check-ins yet — be the first.");
-    // Tip board: per recipient, unique tippers + totals.
+    // Tip board: per recipient, unique tippers + totals (bigint sort, L-11).
     const recv = new Map();
     for (const ev of tips) {
       const to = ev.args.to.toLowerCase();
@@ -315,14 +336,14 @@ async function loadBoards() {
       r.tippers.add(ev.args.from.toLowerCase());
       r.total += ev.args.amount;
     }
-    const tipRows = [...recv.values()].map((r) => ({ handle: r.handle, n: r.tippers.size, total: fmtBnb(r.total) }))
-      .sort((a, b) => b.n - a.n || Number(b.total) - Number(a.total));
+    const tipRows = [...recv.values()].map((r) => ({ handle: r.handle, n: r.tippers.size, total: r.total }))
+      .sort((a, b) => b.n - a.n || (b.total > a.total ? 1 : b.total < a.total ? -1 : 0));
     renderBoard("tipBoard", tipRows.slice(0, 20).map((r, i) =>
-      `<tr><td>${i + 1}</td><td>${esc(r.handle)}.ai</td><td>${r.n}</td><td>${r.total}</td></tr>`),
+      `<tr><td>${i + 1}</td><td>${esc(r.handle)}.ai</td><td>${r.n}</td><td>${fmtBnb(r.total)}</td></tr>`),
       "No tips yet — be the first.");
   } catch (e) {
     console.error(e);
-    setBoardEmpty();
+    setBoardError();
   }
 }
 
@@ -334,7 +355,148 @@ function setBoardEmpty() {
   renderBoard("streakBoard", [], "Contract not deployed on this network yet.");
   renderBoard("tipBoard", [], "Contract not deployed on this network yet.");
 }
+function setBoardError() {
+  // Honest RPC failure — never the false "not deployed" message (audit M-12).
+  // Only overwrite while the boards still show their loading state, so a
+  // refresh failure never wipes rows that already rendered.
+  for (const id of ["streakBoard", "tipBoard"]) {
+    const body = document.querySelector("#" + id + " tbody");
+    if (body && /Loading/.test(body.textContent)) {
+      body.innerHTML = `<tr><td colspan="5">Couldn't load the leaderboard — the BSC RPC is unavailable right now. Your streaks and tips are safe on-chain; try again in a bit.</td></tr>`;
+    }
+  }
+}
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+// ---------- Paged event-log fetching (audit M-10) ----------
+// Public BSC RPCs rate-limit or reject wide eth_getLogs ranges, so logs are
+// fetched in small pages from the deploy block forward, cached in
+// localStorage, and only the delta is fetched on later visits. A page that
+// fails on every RPC is skipped, not fatal: the UI shows what it has and
+// says so honestly instead of spinning forever.
+const LOG_PAGE = 10000;
+const LOG_TIMEOUT_MS = 15000;
+const LOG_CACHE_PREFIX = "agentidhub:logs:v1:";
+
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("timeout")), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+function logCacheKey(contract, eventName) {
+  return LOG_CACHE_PREFIX + (net ? net.chainId : 56) + ":" + contract.target + ":" + eventName;
+}
+function readLogCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !Array.isArray(d.events) || typeof d.coveredTo !== "number") return null;
+    return d;
+  } catch { return null; }
+}
+function writeLogCache(key, data) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* storage full/blocked: caching is best-effort */ }
+}
+
+// Providers to try for eth_getLogs, in order. The wallet/main RPC first,
+// then public fallbacks (mainnet only — testnet has no log fallbacks).
+function logProviders() {
+  const list = [provider];
+  if (net && net.chainId === 56) {
+    for (const u of (CONFIG.mainnet.logsRpcs || [])) {
+      try { list.push(new ethers.JsonRpcProvider(u)); } catch { /* ignore */ }
+    }
+  }
+  return list;
+}
+
+// Fetch all logs for one event in [fromBlock, toBlock], paged + cached.
+// Returns { logs: [{args, blockNumber, index}], complete: bool }.
+async function fetchLogsPaged(contract, filter, eventName, fromBlock, toBlock) {
+  const key = logCacheKey(contract, eventName);
+  const cache = readLogCache(key) || { coveredTo: fromBlock - 1, events: [] };
+  const byId = new Map(cache.events.map((e) => [e.b + ":" + e.i, e]));
+  const start = Math.max(fromBlock, cache.coveredTo + 1);
+  let complete = true;
+  let coveredTo = cache.coveredTo;
+  if (start <= toBlock) {
+    const pages = [];
+    for (let f = start; f <= toBlock; f += LOG_PAGE) pages.push([f, Math.min(toBlock, f + LOG_PAGE - 1)]);
+    const providers = logProviders();
+    const results = await Promise.all(pages.map(async ([f, t]) => {
+      for (const p of providers) {
+        try {
+          const logs = await withTimeout(contract.connect(p).queryFilter(filter, f, t), LOG_TIMEOUT_MS);
+          return { f, t, ok: true, logs };
+        } catch { /* try the next provider */ }
+      }
+      return { f, t, ok: false, logs: [] };
+    }));
+    const okPages = new Set(results.filter((r) => r.ok).map((r) => r.f));
+    for (const r of results) {
+      if (!r.ok) { complete = false; continue; }
+      for (const l of r.logs) {
+        byId.set(l.blockNumber + ":" + l.index, { b: l.blockNumber, i: l.index, topics: [...l.topics], data: l.data });
+      }
+    }
+    // coveredTo advances only past contiguous successful pages.
+    let next = start;
+    for (const [f, t] of pages) {
+      if (!okPages.has(f)) break;
+      next = t + 1;
+    }
+    coveredTo = Math.max(cache.coveredTo, next - 1);
+    writeLogCache(key, { coveredTo, events: [...byId.values()].sort((a, b) => a.b - b.b || a.i - b.i) });
+  }
+  const out = [];
+  for (const e of byId.values()) {
+    if (e.b < fromBlock || e.b > toBlock) continue;
+    try {
+      const parsed = contract.interface.parseLog({ topics: e.topics, data: e.data });
+      out.push({ args: parsed.args, blockNumber: e.b, index: e.i });
+    } catch { /* skip unparseable entries */ }
+  }
+  out.sort((a, b) => a.blockNumber - b.blockNumber || a.index - b.index);
+  return { logs: out, complete };
+}
+
+// ---------- Batched board reads (audit M-12 / L-12) ----------
+// One Multicall3 call replaces hundreds of sequential getUser eth_calls.
+// Falls back to chunked parallel reads if Multicall3 is unavailable.
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+const MULTICALL3_ABI = [
+  "function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])",
+];
+async function batchGetUsers(addresses) {
+  const out = new Map();
+  if (!addresses.length) return out;
+  try {
+    const mc = new ethers.Contract(MULTICALL3, MULTICALL3_ABI, provider);
+    const calls = addresses.map((a) => ({ target: hub.target, allowFailure: true, callData: hub.interface.encodeFunctionData("getUser", [a]) }));
+    const res = await withTimeout(mc.aggregate3(calls), LOG_TIMEOUT_MS);
+    res.forEach((r, i) => {
+      if (!r.success) return;
+      try {
+        const s = hub.interface.decodeFunctionResult("getUser", r.returnData);
+        out.set(addresses[i], { best: Number(s[2]), cur: Number(s[1]), total: Number(s[3]) });
+      } catch { /* skip undecodable rows */ }
+    });
+    if (out.size) return out;
+  } catch { /* fall through to the chunked fallback */ }
+  for (let i = 0; i < addresses.length; i += 20) {
+    const chunk = addresses.slice(i, i + 20);
+    const settled = await Promise.allSettled(chunk.map(async (a) => {
+      const s = await withTimeout(hub.getUser(a), LOG_TIMEOUT_MS);
+      return [a, { best: Number(s.bestStreak), cur: Number(s.currentStreak), total: Number(s.totalCheckIns) }];
+    }));
+    for (const r of settled) if (r.status === "fulfilled") out.set(r.value[0], r.value[1]);
+  }
+  return out;
+}
 
 // ---------- Agent-first preview: live activity feed, recent tips, Mecha gallery ----------
 // All read-only, best-effort: any failure leaves the honest empty state in place.
@@ -366,23 +528,30 @@ const TIER_CLASS = ["t-common", "t-rare", "t-epic", "t-legendary", "t-mythic"];
 async function loadActivityFeed() {
   const ul = $("activityFeed");
   if (!ul || !hub) return;
+  const showError = () => {
+    if (ul.dataset.loaded !== "1") ul.innerHTML = "<li>Couldn't load live activity — the BSC RPC is unavailable right now. Try again in a bit.</li>";
+  };
   try {
     const current = await provider.getBlockNumber();
-    const from = Math.max(HUB_DEPLOY_BLOCK, current - 200000);
-    const [checkIns, tips, passTx, mechaTx] = await Promise.all([
-      hub.queryFilter(hub.filters.CheckIn, from, current),
-      hub.queryFilter(hub.filters.Tip, from, current),
-      pass ? pass.queryFilter(pass.filters.Transfer, from, current) : Promise.resolve([]),
-      mecha ? mecha.queryFilter(mecha.filters.Transfer, from, current) : Promise.resolve([]),
+    const [ci, tp, px, mx] = await Promise.all([
+      fetchLogsPaged(hub, hub.filters.CheckIn, "CheckIn", HUB_DEPLOY_BLOCK, current),
+      fetchLogsPaged(hub, hub.filters.Tip, "Tip", HUB_DEPLOY_BLOCK, current),
+      pass ? fetchLogsPaged(pass, pass.filters.Transfer, "Transfer", HUB_DEPLOY_BLOCK, current) : Promise.resolve({ logs: [], complete: true }),
+      mecha ? fetchLogsPaged(mecha, mecha.filters.Transfer, "Transfer", HUB_DEPLOY_BLOCK, current) : Promise.resolve({ logs: [], complete: true }),
     ]);
     const rows = [];
-    for (const ev of checkIns) rows.push({ kind: "checkin", block: ev.blockNumber, idx: ev.index, user: ev.args.user, handle: ev.args.handle, streak: Number(ev.args.streak) });
-    for (const ev of tips) rows.push({ kind: "tip", block: ev.blockNumber, idx: ev.index, from: ev.args.from, handle: ev.args.handle, to: ev.args.to, amount: ev.args.amount });
-    for (const ev of passTx) rows.push({ kind: "pass", block: ev.blockNumber, idx: ev.index, to: ev.args.to, id: Number(ev.args.tokenId) });
-    for (const ev of mechaTx) rows.push({ kind: "mecha", block: ev.blockNumber, idx: ev.index, to: ev.args.to, id: Number(ev.args.tokenId) });
+    for (const ev of ci.logs) rows.push({ kind: "checkin", block: ev.blockNumber, idx: ev.index, user: ev.args.user, handle: ev.args.handle, streak: Number(ev.args.streak) });
+    for (const ev of tp.logs) rows.push({ kind: "tip", block: ev.blockNumber, idx: ev.index, from: ev.args.from, handle: ev.args.handle, to: ev.args.to, amount: ev.args.amount });
+    for (const ev of px.logs) rows.push({ kind: "pass", block: ev.blockNumber, idx: ev.index, to: ev.args.to, id: Number(ev.args.tokenId) });
+    for (const ev of mx.logs) rows.push({ kind: "mecha", block: ev.blockNumber, idx: ev.index, to: ev.args.to, id: Number(ev.args.tokenId) });
     rows.sort((a, b) => b.block - a.block || b.idx - a.idx);
     const top = rows.slice(0, 10);
-    if (!top.length) { ul.innerHTML = "<li>No on-chain activity yet — be the first agent to check in.</li>"; return; }
+    const allComplete = ci.complete && tp.complete && px.complete && mx.complete;
+    if (!top.length) {
+      if (allComplete) { ul.innerHTML = "<li>No on-chain activity yet — be the first agent to check in.</li>"; ul.dataset.loaded = "1"; }
+      else showError();
+      return;
+    }
     const times = await blockTimes(top.map((r) => r.block));
     const items = await Promise.all(top.map(async (r) => {
       const t = times.get(r.block) ? timeAgo(times.get(r.block)) : "block " + r.block;
@@ -404,18 +573,25 @@ async function loadActivityFeed() {
       return `<li><span class="f-ico">🤖</span><span class="f-who">${h ? esc(h) + ".ai" : short(r.to)}</span><span class="f-what">minted Mecha #${String(r.id).padStart(4, "0")}</span>${tier ? `<span class="${tc}">${tier}</span>` : ""}<span class="f-time">${t}</span></li>`;
     }));
     ul.innerHTML = items.join("");
+    ul.dataset.loaded = "1";
     $("activityUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · refreshes every minute.";
-  } catch (e) { console.error(e); /* keep the loading/empty state */ }
+  } catch (e) { console.error(e); showError(); }
 }
 
 async function loadRecentTips() {
   const ul = $("recentTips");
   if (!ul || !hub) return;
+  const showError = () => {
+    if (ul.dataset.loaded !== "1") ul.innerHTML = "<li>Couldn't load recent tips — the BSC RPC is unavailable right now. Try again in a bit.</li>";
+  };
   try {
     const current = await provider.getBlockNumber();
-    const from = Math.max(HUB_DEPLOY_BLOCK, current - 200000);
-    const tips = await hub.queryFilter(hub.filters.Tip, from, current);
-    if (!tips.length) { ul.innerHTML = "<li>No tips yet — be the first agent to get paid by name.</li>"; return; }
+    const { logs: tips, complete } = await fetchLogsPaged(hub, hub.filters.Tip, "Tip", HUB_DEPLOY_BLOCK, current);
+    if (!tips.length) {
+      if (complete) { ul.innerHTML = "<li>No tips yet — be the first agent to get paid by name.</li>"; ul.dataset.loaded = "1"; }
+      else showError();
+      return;
+    }
     const top = [...tips].sort((a, b) => b.blockNumber - a.blockNumber || b.index - a.index).slice(0, 6);
     const times = await blockTimes(top.map((e) => e.blockNumber));
     const items = await Promise.all(top.map(async (ev) => {
@@ -424,7 +600,8 @@ async function loadRecentTips() {
       return `<li><span class="f-ico">💛</span><span class="f-who">${esc(ev.args.handle)}.ai</span><span class="f-what">→ ${toH ? esc(toH) + ".ai" : short(ev.args.to)}</span><span class="f-amt">${fmtBnb(ev.args.amount)} BNB</span><span class="f-time">${t}</span></li>`;
     }));
     ul.innerHTML = items.join("");
-  } catch (e) { console.error(e); }
+    ul.dataset.loaded = "1";
+  } catch (e) { console.error(e); showError(); }
 }
 
 async function loadMechaGallery() {
@@ -445,7 +622,11 @@ async function loadMechaGallery() {
       return `<li><span class="f-ico">🤖</span><span class="f-who">Mecha #${String(id).padStart(4, "0")}</span>${tier ? `<span class="${tc}">${tier}</span>` : ""}<span class="f-what">owned by ${h ? esc(h) + ".ai" : short(owner)}</span><a class="f-link" href="https://element.market/assets/bsc/${net.mecha}/${id}" target="_blank" rel="noopener">Buy on Element</a></li>`;
     }));
     ul.innerHTML = items.join("");
-  } catch (e) { console.error(e); }
+    ul.dataset.loaded = "1";
+  } catch (e) {
+    console.error(e);
+    if (ul.dataset.loaded !== "1") ul.innerHTML = "<li>Couldn't load the latest Mecha mints right now — try refreshing.</li>";
+  }
 }
 
 async function updateHeroStats() {
@@ -496,11 +677,9 @@ if (window.ethereum) {
         $("mintMechaBtn").disabled = false;
         $("mintMechaBtn").textContent = "Connect wallet to mint";
       }
-      await loadBoards();
-      await updateHeroStats();
-      await loadActivityFeed();
-      await loadRecentTips();
-      await loadMechaGallery();
+      // Loaders run in parallel: one slow/hung feed must never block the
+      // others (previously the sequential chain left the gallery stuck too).
+      await Promise.allSettled([loadBoards(), updateHeroStats(), loadActivityFeed(), loadRecentTips(), loadMechaGallery()]);
       setInterval(() => {
         loadActivityFeed().catch(() => {});
         loadRecentTips().catch(() => {});
