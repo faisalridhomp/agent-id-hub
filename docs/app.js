@@ -525,3 +525,25 @@ if (copyBtn) copyBtn.addEventListener("click", async () => {
     ta.remove();
   }
 });
+
+// M-13: publish the prompt's SHA-256 and warn if the page copy drifts from
+// agent-prompt.txt. Best-effort only: any failure leaves the prompt and the
+// copy button working exactly as before.
+(async () => {
+  try {
+    const el = $("promptHash");
+    if (!el || !window.crypto || !crypto.subtle) return;
+    const enc = new TextEncoder();
+    const hex = async (s) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(s)))]
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+    const shown = $("agentPrompt").textContent;
+    const shownHash = await hex(shown);
+    el.textContent = "SHA-256: " + shownHash.slice(0, 16) + "…";
+    const res = await fetch("agent-prompt.txt");
+    if (!res.ok) return;
+    const fileHash = await hex(await res.text());
+    if (fileHash !== shownHash) {
+      el.textContent = "Warning: the prompt shown here differs from agent-prompt.txt — follow agent-prompt.txt.";
+    }
+  } catch { /* hash display is best-effort */ }
+})();
