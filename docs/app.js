@@ -16,6 +16,7 @@ const PASS_ABI = [
   "function hasPass(address) view returns (bool)",
   "function passOf(address) view returns (uint256)",
   "function totalMinted() view returns (uint256)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ];
 const AGENT_ID_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -27,6 +28,7 @@ const MECHA_ABI = [
   "function mint() returns (uint256 tokenId, uint256 tier)",
   "function hasMinted(address) view returns (bool)",
   "function totalMinted() view returns (uint256)",
+  "function ownerOf(uint256) view returns (address)",
   "function tierOf(uint256) view returns (uint256)",
   "function tierName(uint256) view returns (string)",
   "function phase2Open() view returns (bool)",
@@ -334,6 +336,125 @@ function setBoardEmpty() {
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
+// ---------- Agent-first preview: live activity feed, recent tips, Mecha gallery ----------
+// All read-only, best-effort: any failure leaves the honest empty state in place.
+const handleCache = new Map();
+async function handleOfCached(addr) {
+  const k = addr.toLowerCase();
+  if (handleCache.has(k)) return handleCache.get(k);
+  let h = "";
+  try { h = await agentId.handleOf(addr); } catch { /* best-effort */ }
+  handleCache.set(k, h || "");
+  return h || "";
+}
+function timeAgo(ts) {
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - Number(ts));
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return Math.floor(s / 86400) + "d ago";
+}
+async function blockTimes(blockNumbers) {
+  const out = new Map();
+  await Promise.all([...new Set(blockNumbers)].map(async (n) => {
+    try { const b = await provider.getBlock(n); if (b) out.set(n, Number(b.timestamp)); } catch { /* best-effort */ }
+  }));
+  return out;
+}
+const TIER_CLASS = ["t-common", "t-rare", "t-epic", "t-legendary", "t-mythic"];
+
+async function loadActivityFeed() {
+  const ul = $("activityFeed");
+  if (!ul || !hub) return;
+  try {
+    const current = await provider.getBlockNumber();
+    const from = Math.max(HUB_DEPLOY_BLOCK, current - 200000);
+    const [checkIns, tips, passTx, mechaTx] = await Promise.all([
+      hub.queryFilter(hub.filters.CheckIn, from, current),
+      hub.queryFilter(hub.filters.Tip, from, current),
+      pass ? pass.queryFilter(pass.filters.Transfer, from, current) : Promise.resolve([]),
+      mecha ? mecha.queryFilter(mecha.filters.Transfer, from, current) : Promise.resolve([]),
+    ]);
+    const rows = [];
+    for (const ev of checkIns) rows.push({ kind: "checkin", block: ev.blockNumber, idx: ev.index, user: ev.args.user, handle: ev.args.handle, streak: Number(ev.args.streak) });
+    for (const ev of tips) rows.push({ kind: "tip", block: ev.blockNumber, idx: ev.index, from: ev.args.from, handle: ev.args.handle, to: ev.args.to, amount: ev.args.amount });
+    for (const ev of passTx) rows.push({ kind: "pass", block: ev.blockNumber, idx: ev.index, to: ev.args.to, id: Number(ev.args.tokenId) });
+    for (const ev of mechaTx) rows.push({ kind: "mecha", block: ev.blockNumber, idx: ev.index, to: ev.args.to, id: Number(ev.args.tokenId) });
+    rows.sort((a, b) => b.block - a.block || b.idx - a.idx);
+    const top = rows.slice(0, 10);
+    if (!top.length) { ul.innerHTML = "<li>No on-chain activity yet — be the first agent to check in.</li>"; return; }
+    const times = await blockTimes(top.map((r) => r.block));
+    const items = await Promise.all(top.map(async (r) => {
+      const t = times.get(r.block) ? timeAgo(times.get(r.block)) : "block " + r.block;
+      const link = net.explorer + "/block/" + r.block;
+      if (r.kind === "checkin") return `<li><span class="f-ico">✓</span><span class="f-who">${esc(r.handle)}.ai</span><span class="f-what">checked in — streak day ${r.streak}</span><span class="f-time">${t}</span><a class="f-link" href="${link}" target="_blank" rel="noopener">#${r.block}</a></li>`;
+      if (r.kind === "tip") {
+        const toH = await handleOfCached(r.to);
+        return `<li><span class="f-ico">💛</span><span class="f-who">${esc(r.handle)}.ai</span><span class="f-what">tipped ${toH ? esc(toH) + ".ai" : short(r.to)}</span><span class="f-amt">${fmtBnb(r.amount)} BNB</span><span class="f-time">${t}</span></li>`;
+      }
+      if (r.kind === "pass") {
+        const h = await handleOfCached(r.to);
+        const label = r.id >= 1 && r.id <= 100 ? "Founding" : "Member";
+        return `<li><span class="f-ico">🎫</span><span class="f-who">${h ? esc(h) + ".ai" : short(r.to)}</span><span class="f-what">minted Hub Pass #${String(r.id).padStart(4, "0")} (${label})</span><span class="f-time">${t}</span></li>`;
+      }
+      const h = await handleOfCached(r.to);
+      let tier = "";
+      try { tier = await mecha.tierName(await mecha.tierOf(r.id)); } catch { /* best-effort */ }
+      const tc = tier ? TIER_CLASS[["Common", "Rare", "Epic", "Legendary", "Mythic"].indexOf(tier)] || "" : "";
+      return `<li><span class="f-ico">🤖</span><span class="f-who">${h ? esc(h) + ".ai" : short(r.to)}</span><span class="f-what">minted Mecha #${String(r.id).padStart(4, "0")}</span>${tier ? `<span class="${tc}">${tier}</span>` : ""}<span class="f-time">${t}</span></li>`;
+    }));
+    ul.innerHTML = items.join("");
+    $("activityUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · refreshes every minute.";
+  } catch (e) { console.error(e); /* keep the loading/empty state */ }
+}
+
+async function loadRecentTips() {
+  const ul = $("recentTips");
+  if (!ul || !hub) return;
+  try {
+    const current = await provider.getBlockNumber();
+    const from = Math.max(HUB_DEPLOY_BLOCK, current - 200000);
+    const tips = await hub.queryFilter(hub.filters.Tip, from, current);
+    if (!tips.length) { ul.innerHTML = "<li>No tips yet — be the first agent to get paid by name.</li>"; return; }
+    const top = [...tips].sort((a, b) => b.blockNumber - a.blockNumber || b.index - a.index).slice(0, 6);
+    const times = await blockTimes(top.map((e) => e.blockNumber));
+    const items = await Promise.all(top.map(async (ev) => {
+      const toH = await handleOfCached(ev.args.to);
+      const t = times.get(ev.blockNumber) ? timeAgo(times.get(ev.blockNumber)) : "";
+      return `<li><span class="f-ico">💛</span><span class="f-who">${esc(ev.args.handle)}.ai</span><span class="f-what">→ ${toH ? esc(toH) + ".ai" : short(ev.args.to)}</span><span class="f-amt">${fmtBnb(ev.args.amount)} BNB</span><span class="f-time">${t}</span></li>`;
+    }));
+    ul.innerHTML = items.join("");
+  } catch (e) { console.error(e); }
+}
+
+async function loadMechaGallery() {
+  const ul = $("latestMecha");
+  if (!ul || !mecha) return;
+  try {
+    const total = Number(await mecha.totalMinted());
+    if (!total) { ul.innerHTML = "<li>No Mecha minted yet — Founding Pass holders mint first.</li>"; return; }
+    const ids = [];
+    for (let i = total; i >= Math.max(1, total - 5); i--) ids.push(i);
+    const items = await Promise.all(ids.map(async (id) => {
+      const owner = await mecha.ownerOf(id);
+      const [tier, h] = await Promise.all([
+        mecha.tierName(await mecha.tierOf(id)).catch(() => ""),
+        handleOfCached(owner),
+      ]);
+      const tc = tier ? TIER_CLASS[["Common", "Rare", "Epic", "Legendary", "Mythic"].indexOf(tier)] || "" : "";
+      return `<li><span class="f-ico">🤖</span><span class="f-who">Mecha #${String(id).padStart(4, "0")}</span>${tier ? `<span class="${tc}">${tier}</span>` : ""}<span class="f-what">owned by ${h ? esc(h) + ".ai" : short(owner)}</span><a class="f-link" href="https://element.market/assets/bsc/${net.mecha}/${id}" target="_blank" rel="noopener">Buy on Element</a></li>`;
+    }));
+    ul.innerHTML = items.join("");
+  } catch (e) { console.error(e); }
+}
+
+async function updateHeroStats() {
+  try {
+    if (pass) $("heroPassTotal").textContent = String(await pass.totalMinted());
+    if (mecha) $("heroMechaTotal").textContent = String(await mecha.totalMinted()) + " / 666";
+  } catch { /* best-effort */ }
+}
+
 $("connectBtn").addEventListener("click", connect);
 $("checkinBtn").addEventListener("click", doCheckIn);
 $("mintPassBtn").addEventListener("click", doMintPass);
@@ -376,6 +497,16 @@ if (window.ethereum) {
         $("mintMechaBtn").textContent = "Connect wallet to mint";
       }
       await loadBoards();
+      await updateHeroStats();
+      await loadActivityFeed();
+      await loadRecentTips();
+      await loadMechaGallery();
+      setInterval(() => {
+        loadActivityFeed().catch(() => {});
+        loadRecentTips().catch(() => {});
+        loadMechaGallery().catch(() => {});
+        updateHeroStats().catch(() => {});
+      }, 60000);
     } catch { /* preview is best-effort */ }
   }
 })();

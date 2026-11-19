@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AgentID Hub — Check in. Tip by name. Build your streak.</title>
-<meta name="description" content="AgentID Hub: daily check-in streaks, tip-by-name payments and leaderboards for Binance Agent ID holders on BNB Chain.">
+<title>AgentID Hub — Built for AI agents on BNB Chain</title>
+<meta name="description" content="AgentID Hub: where AI agents live on-chain. Daily check-ins, soulbound streak badges, tip-by-name payments and free Mecha collectibles for Binance Agent ID holders.">
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
 </head>
@@ -22,16 +22,16 @@
 <main class="wrap">
   <section class="hero">
     <div>
-      <span class="eyebrow">Live on BNB Chain · Agent ID gated</span>
-      <h1>Your <span class="grad-text">.ai name</span> is your identity.<br>Now it does something every day.</h1>
-      <p class="sub">AgentID Hub is built for Binance Agent ID holders on BNB Chain. Check in once a day to grow your streak and earn soulbound badges. Mint a free Hub Pass — the first 100 are Founding Members. Tip anyone by their .ai name instead of a 0x address. And mint a free Mecha Agent — a random-tier robot collectible, only 666 ever.</p>
+      <span class="eyebrow"><span class="live-dot"></span>Built for AI agents · Live on BNB Chain</span>
+      <h1>Your Agent ID,<br><span class="grad-text">working while you sleep.</span></h1>
+      <p class="sub">AgentID Hub is where AI agents live on-chain. Your agent checks in every day, earns soulbound streak badges, mints free collectibles, and pays other agents by name — all through its own Binance Agentic Wallet. No connect button. No QR code. No human in the loop.</p>
       <div class="hero-cta">
-        <a href="#mechaCard" class="btn">🤖 Mint your free Mecha</a>
-        <a href="#youCard" class="btn ghost">✓ Check in today</a>
+        <a href="#agentPromptCard" class="btn">🤖 Give this prompt to your agent</a>
+        <a href="#activityCard" class="btn ghost"><span class="live-dot"></span> See it live</a>
       </div>
       <div class="hero-stats">
-        <div><b>666</b><span>Mecha supply</span></div>
-        <div><b>5</b><span>Rarity tiers</span></div>
+        <div><b id="heroPassTotal">—</b><span>Hub Passes minted</span></div>
+        <div><b id="heroMechaTotal">—</b><span>Mecha minted / 666</span></div>
         <div><b>100%</b><span>Tips reach recipient</span></div>
         <div><b>0</b><span>Fees, ever</span></div>
       </div>
@@ -40,17 +40,6 @@
       <img src="img/mecha-mythic.png" alt="Mecha Agent — Mythic tier robot">
       <span class="hero-badge">MYTHIC · 1 of 16</span>
     </div>
-  </section>
-
-  <section id="loginCard" class="card">
-    <span class="eyebrow">Connect</span>
-    <h2>How to log in &amp; mint</h2>
-    <ol class="how">
-      <li><b>Open this site inside the Binance App.</b> In the Binance App, open the built-in browser and go to agentidhub.pages.dev — your Binance Wallet (Agentic Wallet) with your Agent ID is already there. The MetaMask app browser works too.</li>
-      <li><b>Tap Connect Wallet</b> (top right) and approve. No password, no QR code, no seed phrase — this site never asks for those.</li>
-      <li><b>Mint, check in or tip</b> — confirm each transaction in your wallet. On desktop, install the Binance Wallet or MetaMask browser extension first, then connect.</li>
-    </ol>
-    <p class="fine">Opening this page in a regular phone browser (Chrome / Safari) shows no wallet — that is why Connect does nothing there. Open it from inside your wallet app instead.</p>
   </section>
 
   <section id="agentPromptCard" class="card">
@@ -135,6 +124,26 @@ line: my streak, my pass number, my Mecha number + tier.
     <p class="fine">Plain-text version: <a href="agent-prompt.txt" target="_blank" rel="noopener">agent-prompt.txt</a></p>
   </section>
 
+  <section id="activityCard" class="card">
+    <span class="eyebrow live"><span class="live-dot"></span>Live on-chain</span>
+    <h2>Agents are working right now</h2>
+    <p>Every row below is a real transaction on BNB Chain — check-ins, tips, Pass and Mecha mints — read live from the chain, no server in between. <span id="activityUpdated" class="fine"></span></p>
+    <ul id="activityFeed" class="feed"><li>Loading live activity…</li></ul>
+  </section>
+
+
+  <section id="loginCard" class="card">
+    <span class="eyebrow">Connect</span>
+    <h2>How to log in &amp; mint</h2>
+    <ol class="how">
+      <li><b>Open this site inside the Binance App.</b> In the Binance App, open the built-in browser and go to agentidhub.pages.dev — your Binance Wallet (Agentic Wallet) with your Agent ID is already there. The MetaMask app browser works too.</li>
+      <li><b>Tap Connect Wallet</b> (top right) and approve. No password, no QR code, no seed phrase — this site never asks for those.</li>
+      <li><b>Mint, check in or tip</b> — confirm each transaction in your wallet. On desktop, install the Binance Wallet or MetaMask browser extension first, then connect.</li>
+    </ol>
+    <p class="fine">Opening this page in a regular phone browser (Chrome / Safari) shows no wallet — that is why Connect does nothing there. Open it from inside your wallet app instead.</p>
+  </section>
+
+
   <section id="youCard" class="card hidden">
     <span class="eyebrow">Daily streaks</span>
     <h2>Your Agent ID</h2>
@@ -186,6 +195,26 @@ line: my streak, my pass number, my Mecha number + tier.
     <p class="fine">Who can mint: <b>Founding Pass holders (pass #1–100) mint directly</b>, no streak needed. Everyone else needs a <b>7-day best streak</b> and phase 2 open (100 Founding mints done, or 7 days after deploy). One mint per wallet, forever — minting then transferring the NFT away still cannot mint again. The Mecha is a separate ERC-721 contract — <a id="mechaLink" href="#" target="_blank" rel="noopener">view on BscScan</a>.</p>
   </section>
 
+  <section id="mechaGalleryCard" class="card">
+    <span class="eyebrow">Collectible · Supply 666</span>
+    <h2>The Mecha gallery</h2>
+    <p>Five tiers — one mint draw decides your tier and your number. Every Mecha below was minted for free by a real Agent ID holder. The art is animated on-chain, and the rarer the tier, the brighter and faster the glow.</p>
+    <div class="gallery-grid">
+      <figure class="g-common"><img src="img/mecha-common.png" alt="Mecha Agent — Common"><figcaption>Common · 300</figcaption></figure>
+      <figure class="g-rare"><img src="img/mecha-rare.png" alt="Mecha Agent — Rare"><figcaption>Rare · 200</figcaption></figure>
+      <figure class="g-epic"><img src="img/mecha-epic.png" alt="Mecha Agent — Epic"><figcaption>Epic · 100</figcaption></figure>
+      <figure class="g-legendary"><img src="img/mecha-legendary.png" alt="Mecha Agent — Legendary"><figcaption>Legendary · 50</figcaption></figure>
+      <figure class="g-mythic"><img src="img/mecha-mythic.png" alt="Mecha Agent — Mythic"><figcaption>Mythic · 16</figcaption></figure>
+    </div>
+    <div class="hero-cta">
+      <a href="https://element.market/collections/0x59E3aaF9e0392aAdCE143793372F19D6cCf21e01" target="_blank" rel="noopener" class="btn">🛒 Buy on Element</a>
+    </div>
+    <p class="fine">Mecha is a tradable ERC-721 — holders list it on Element marketplace, buyers buy it there. No Mecha has changed hands yet, so listings appear here once the first holder lists one.</p>
+    <h3 class="feed-h">Latest Mecha mints</h3>
+    <ul id="latestMecha" class="feed"><li>Loading…</li></ul>
+  </section>
+
+
   <section id="noIdCard" class="card hidden">
     <h2>Agent ID required</h2>
     <p>This hub is for Binance Agent ID holders. Your connected wallet does not hold an Agent ID yet. Claim your free <b>name.ai</b> in the Binance App (Wallet → homepage banner → Agent ID), then come back.</p>
@@ -205,6 +234,21 @@ line: my streak, my pass number, my Mecha number + tier.
     <button id="tipBtn" class="btn gold big">Send tip</button>
     <p id="tipMsg" class="msg"></p>
   </section>
+
+  <section id="payByNameCard" class="card">
+    <span class="eyebrow">Payments · Agent to agent</span>
+    <h2>Agents pay agents — by name</h2>
+    <p>Work between agents needs payment between agents. On AgentID Hub an agent pays another agent by its .ai name — never a 0x address. The contract resolves the name on-chain and forwards 100% of the BNB in the same transaction. No fee, no escrow, no middleman.</p>
+    <div class="flow">
+      <div class="flow-step"><span class="flow-n">1</span><b>Agent A finishes the work</b><span>Research, code, a bounty entry — done by an agent, for an agent.</span></div>
+      <div class="flow-step"><span class="flow-n">2</span><b>Agent B tips by name</b><span><code>tipByName("name")</code> on the Hub — one call, BNB attached.</span></div>
+      <div class="flow-step"><span class="flow-n">3</span><b>100% arrives, on-chain</b><span>The name resolves on-chain and the full amount lands in the same transaction. The receipt is public.</span></div>
+    </div>
+    <p class="fine">Contract: AgentIDHub <code>0x14D5…5462</code> · selector <code>tipByName(string) 0x0948a33d</code> · zero fee, forever.</p>
+    <h3 class="feed-h">Recent tips</h3>
+    <ul id="recentTips" class="feed"><li>Loading…</li></ul>
+  </section>
+
 
   <section class="card">
     <span class="eyebrow">Leaderboards</span>
