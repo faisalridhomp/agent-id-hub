@@ -707,8 +707,13 @@ async function loadMechaGallery() {
   try {
     const total = Number(await callWithFallback((p) => mecha.connect(p).totalMinted()));
     if (!total) { ul.innerHTML = "<li>No Mecha minted yet — Founding Pass holders mint first.</li>"; return; }
-    const ids = [];
-    for (let i = total; i >= Math.max(1, total - 5); i--) ids.push(i);
+    // Token IDs are RANDOM draws in 1..666, NOT 1..total: ownerOf(54)
+    // reverts (ERC721NonexistentToken) because #54 was never minted.
+    // The latest mints must come from the Transfer log, never total-k.
+    const current = await currentBlock();
+    const { logs } = await fetchLogsPaged(mecha, mecha.filters.Transfer, "Transfer", HUB_DEPLOY_BLOCK, current);
+    const ids = [...logs].sort((a, b) => b.blockNumber - a.blockNumber || b.index - a.index).slice(0, 6).map((e) => Number(e.args.tokenId));
+    if (!ids.length) { ul.innerHTML = "<li>No Mecha minted yet — Founding Pass holders mint first.</li>"; return; }
     // allSettled: one flaky owner/tier lookup must never wipe the gallery.
     const settled = await Promise.allSettled(ids.map(async (id) => {
       const owner = await callWithFallback((p) => mecha.connect(p).ownerOf(id));
