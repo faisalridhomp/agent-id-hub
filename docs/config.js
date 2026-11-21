@@ -6,8 +6,24 @@ const CONFIG = {
     chainId: 56,
     chainHex: "0x38",
     rpc: "https://bsc-dataseed.binance.org",
+    // Read RPCs for eth_call (fix 2026-11-21): eth_call works on every free
+    // public endpoint, but any single one flakes under load — so every
+    // read-only call tries these in order until one answers. Verified live
+    // 2026-11-21: all five answered totalMinted in ~75–200ms. llamarp and
+    // 1rpc timed out on getBlockNumber and are NOT in this list.
+    readRpcs: [
+      "https://bsc-dataseed.binance.org",
+      "https://bsc.publicnode.com",
+      "https://bsc.drpc.org",
+      "https://bsc-dataseed1.defibit.io",
+      "https://bsc-dataseed1.ninicoin.io",
+    ],
     // Fallback RPCs for eth_getLogs only (audit M-10): the main RPC
     // rate-limits wide log ranges, so log pages try these in order.
+    // NOTE 2026-11-21: ALL of these now fail eth_getLogs from a browser
+    // (publicnode -32005 rate limit, drpc free-plan timeout, llamarp/1rpc
+    // timeout). Logs are served from the static snapshot (data/logs.json)
+    // instead; getLogs only fetches the small delta since the snapshot.
     logsRpcs: [
       "https://bsc.publicnode.com",
       "https://binance.llamarpc.com",

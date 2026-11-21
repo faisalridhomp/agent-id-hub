@@ -157,7 +157,7 @@ async function loadPass() {
     return;
   }
   card.classList.remove("hidden");
-  $("passTotal").textContent = String(await pass.totalMinted());
+  try { $("passTotal").textContent = String(await callWithFallback((p) => pass.connect(p).totalMinted())); } catch { $("passTotal").textContent = "—"; }
   const has = await pass.hasPass(userAddr);
   if (has) {
     const id = await pass.passOf(userAddr);
@@ -185,7 +185,7 @@ async function loadMecha() {
     $("mintMechaBtn").textContent = "Mecha Agent — coming soon";
     return;
   }
-  $("mechaTotal").textContent = String(await mecha.totalMinted()) + " / 666";
+  try { $("mechaTotal").textContent = String(await callWithFallback((p) => mecha.connect(p).totalMinted())) + " / 666"; } catch { $("mechaTotal").textContent = "—"; }
   if (await mecha.hasMinted(userAddr)) {
     $("mechaStatus").textContent = "Minted ✓ (1 per wallet)";
     $("mintMechaBtn").classList.add("hidden");
@@ -296,7 +296,7 @@ async function doTip() {
 async function loadBoards() {
   if (!hub) { setBoardEmpty(); return; }
   try {
-    const current = await provider.getBlockNumber();
+    const current = await currentBlock();
     const [ci, tp] = await Promise.all([
       fetchLogsPaged(hub, hub.filters.CheckIn, "CheckIn", deployBlock, current),
       fetchLogsPaged(hub, hub.filters.Tip, "Tip", deployBlock, current),
@@ -386,6 +386,35 @@ function withTimeout(promise, ms) {
   ]).finally(() => clearTimeout(timer));
 }
 
+// ---------- Read RPC fallback (fix 2026-11-21) ----------
+// One public RPC is never reliable enough: dataseed answered the Hub Pass
+// total but flaked on the Mecha total seconds later, leaving the hero Mecha
+// count as "—". Every read-only call now tries the public endpoints in
+// order until one answers. The NodeReal key is deliberately NOT here — it
+// must never ship in client-side code; logs come from data/logs.json.
+function readProviders() {
+  const list = [provider];
+  if (net && net.chainId === 56) {
+    for (const u of (CONFIG.mainnet.readRpcs || [])) {
+      try { list.push(new ethers.JsonRpcProvider(u)); } catch { /* ignore */ }
+    }
+  }
+  return list;
+}
+// Run fn(p) against each read provider in order; return the first success.
+async function callWithFallback(fn, timeoutMs = 8000) {
+  let lastErr;
+  for (const p of readProviders()) {
+    try { return await withTimeout(fn(p), timeoutMs); }
+    catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("all read RPCs failed");
+}
+// Current block via fallback (getBlockNumber on one provider alone flakes).
+async function currentBlock() {
+  return callWithFallback((p) => p.getBlockNumber());
+}
+
 function logCacheKey(contract, eventName) {
   return LOG_CACHE_PREFIX + (net ? net.chainId : 56) + ":" + contract.target + ":" + eventName;
 }
@@ -416,9 +445,58 @@ function logProviders() {
 
 // Fetch all logs for one event in [fromBlock, toBlock], paged + cached.
 // Returns { logs: [{args, blockNumber, index}], complete: bool }.
+//
+// 2026-11-21 rewrite — the old version fired ~45 pages in parallel via
+// Promise.all, and boards + feed + tips each fetched the same ranges, so a
+// first visit sent 100+ concurrent eth_getLogs and tripped every public
+// RPC's rate limit at once (publicnode -32005 even for 100 blocks; drpc
+// free-plan timeout). Three changes:
+//   1. Static snapshot (data/logs.json, generated from NodeReal — the only
+//      endpoint that serves eth_getLogs) seeds the cache, so a first visit
+//      only fetches the small delta since the snapshot.
+//   2. Concurrent callers for the same event+range share one in-flight fetch.
+//   3. Pages go out 2 at a time, providers rotate per page, one retry after
+//      a backoff — slow but actually completes instead of 429-ing.
+const LOG_CONCURRENCY = 2;
+const LOG_RETRY_DELAY_MS = 800;
+const logFetchInflight = new Map();
+
+// Static snapshot (docs/data/logs.json). Fetched once per page load; any
+// failure just means "no snapshot", never a fatal error.
+let snapshotPromise = null;
+function loadLogSnapshot() {
+  if (!snapshotPromise) {
+    snapshotPromise = (typeof fetch === "function"
+      ? fetch("data/logs.json").then((r) => (r.ok ? r.json() : null))
+      : Promise.resolve(null)).catch(() => null);
+  }
+  return snapshotPromise;
+}
+async function seedCacheFromSnapshot(contract, eventName) {
+  const snap = await loadLogSnapshot();
+  if (!snap || snap.chainId !== (net ? net.chainId : 56)) return null;
+  const entry = snap.logs && snap.logs[contract.target + ":" + eventName];
+  if (!entry || !Array.isArray(entry.events) || typeof entry.coveredTo !== "number") return null;
+  return { coveredTo: entry.coveredTo, events: entry.events };
+}
+
 async function fetchLogsPaged(contract, filter, eventName, fromBlock, toBlock) {
+  const key = (net ? net.chainId : 56) + ":" + contract.target + ":" + eventName + ":" + fromBlock + "-" + toBlock;
+  if (logFetchInflight.has(key)) return logFetchInflight.get(key);
+  const job = fetchLogsPagedInner(contract, filter, eventName, fromBlock, toBlock);
+  logFetchInflight.set(key, job);
+  try { return await job; } finally { logFetchInflight.delete(key); }
+}
+
+async function fetchLogsPagedInner(contract, filter, eventName, fromBlock, toBlock) {
   const key = logCacheKey(contract, eventName);
-  const cache = readLogCache(key) || { coveredTo: fromBlock - 1, events: [] };
+  let cache = readLogCache(key) || { coveredTo: fromBlock - 1, events: [] };
+  const snap = await seedCacheFromSnapshot(contract, eventName);
+  if (snap && snap.coveredTo > cache.coveredTo) {
+    const byId = new Map(cache.events.map((e) => [e.b + ":" + e.i, e]));
+    for (const e of snap.events) byId.set(e.b + ":" + e.i, e);
+    cache = { coveredTo: snap.coveredTo, events: [...byId.values()] };
+  }
   const byId = new Map(cache.events.map((e) => [e.b + ":" + e.i, e]));
   const start = Math.max(fromBlock, cache.coveredTo + 1);
   let complete = true;
@@ -427,15 +505,28 @@ async function fetchLogsPaged(contract, filter, eventName, fromBlock, toBlock) {
     const pages = [];
     for (let f = start; f <= toBlock; f += LOG_PAGE) pages.push([f, Math.min(toBlock, f + LOG_PAGE - 1)]);
     const providers = logProviders();
-    const results = await Promise.all(pages.map(async ([f, t]) => {
-      for (const p of providers) {
-        try {
-          const logs = await withTimeout(contract.connect(p).queryFilter(filter, f, t), LOG_TIMEOUT_MS);
-          return { f, t, ok: true, logs };
-        } catch { /* try the next provider */ }
+    const results = new Array(pages.length);
+    let cursor = 0;
+    async function worker() {
+      while (cursor < pages.length) {
+        const idx = cursor++;
+        const [f, t] = pages[idx];
+        const order = providers.map((_, i) => providers[(i + idx) % providers.length]);
+        let done = null;
+        for (let attempt = 0; attempt < 2 && !done; attempt++) {
+          if (attempt) await new Promise((r) => setTimeout(r, LOG_RETRY_DELAY_MS));
+          for (const p of order) {
+            try {
+              const logs = await withTimeout(contract.connect(p).queryFilter(filter, f, t), LOG_TIMEOUT_MS);
+              done = { f, t, ok: true, logs };
+              break;
+            } catch { /* try the next provider */ }
+          }
+        }
+        results[idx] = done || { f, t, ok: false, logs: [] };
       }
-      return { f, t, ok: false, logs: [] };
-    }));
+    }
+    await Promise.all(Array.from({ length: Math.min(LOG_CONCURRENCY, pages.length) }, () => worker()));
     const okPages = new Set(results.filter((r) => r.ok).map((r) => r.f));
     for (const r of results) {
       if (!r.ok) { complete = false; continue; }
@@ -475,9 +566,9 @@ async function batchGetUsers(addresses) {
   const out = new Map();
   if (!addresses.length) return out;
   try {
-    const mc = new ethers.Contract(MULTICALL3, MULTICALL3_ABI, provider);
     const calls = addresses.map((a) => ({ target: hub.target, allowFailure: true, callData: hub.interface.encodeFunctionData("getUser", [a]) }));
-    const res = await withTimeout(mc.aggregate3(calls), LOG_TIMEOUT_MS);
+    const res = await callWithFallback((p) =>
+      new ethers.Contract(MULTICALL3, MULTICALL3_ABI, p).aggregate3(calls), LOG_TIMEOUT_MS);
     res.forEach((r, i) => {
       if (!r.success) return;
       try {
@@ -490,7 +581,7 @@ async function batchGetUsers(addresses) {
   for (let i = 0; i < addresses.length; i += 20) {
     const chunk = addresses.slice(i, i + 20);
     const settled = await Promise.allSettled(chunk.map(async (a) => {
-      const s = await withTimeout(hub.getUser(a), LOG_TIMEOUT_MS);
+      const s = await callWithFallback((p) => hub.connect(p).getUser(a), LOG_TIMEOUT_MS);
       return [a, { best: Number(s.bestStreak), cur: Number(s.currentStreak), total: Number(s.totalCheckIns) }];
     }));
     for (const r of settled) if (r.status === "fulfilled") out.set(r.value[0], r.value[1]);
@@ -505,7 +596,7 @@ async function handleOfCached(addr) {
   const k = addr.toLowerCase();
   if (handleCache.has(k)) return handleCache.get(k);
   let h = "";
-  try { h = await agentId.handleOf(addr); } catch { /* best-effort */ }
+  try { h = await callWithFallback((p) => agentId.connect(p).handleOf(addr)); } catch { /* best-effort */ }
   handleCache.set(k, h || "");
   return h || "";
 }
@@ -519,7 +610,7 @@ function timeAgo(ts) {
 async function blockTimes(blockNumbers) {
   const out = new Map();
   await Promise.all([...new Set(blockNumbers)].map(async (n) => {
-    try { const b = await provider.getBlock(n); if (b) out.set(n, Number(b.timestamp)); } catch { /* best-effort */ }
+    try { const b = await callWithFallback((p) => p.getBlock(n)); if (b) out.set(n, Number(b.timestamp)); } catch { /* best-effort */ }
   }));
   return out;
 }
@@ -532,7 +623,7 @@ async function loadActivityFeed() {
     if (ul.dataset.loaded !== "1") ul.innerHTML = "<li>Couldn't load live activity — the BSC RPC is unavailable right now. Try again in a bit.</li>";
   };
   try {
-    const current = await provider.getBlockNumber();
+    const current = await currentBlock();
     const [ci, tp, px, mx] = await Promise.all([
       fetchLogsPaged(hub, hub.filters.CheckIn, "CheckIn", HUB_DEPLOY_BLOCK, current),
       fetchLogsPaged(hub, hub.filters.Tip, "Tip", HUB_DEPLOY_BLOCK, current),
@@ -553,7 +644,9 @@ async function loadActivityFeed() {
       return;
     }
     const times = await blockTimes(top.map((r) => r.block));
-    const items = await Promise.all(top.map(async (r) => {
+    // allSettled: one row failing (e.g. a flaky tier lookup) must never
+    // wipe the whole feed — keep every row that rendered.
+    const settled = await Promise.allSettled(top.map(async (r) => {
       const t = times.get(r.block) ? timeAgo(times.get(r.block)) : "block " + r.block;
       const link = net.explorer + "/block/" + r.block;
       if (r.kind === "checkin") return `<li><span class="f-ico">✓</span><span class="f-who">${esc(r.handle)}.ai</span><span class="f-what">checked in — streak day ${r.streak}</span><span class="f-time">${t}</span><a class="f-link" href="${link}" target="_blank" rel="noopener">#${r.block}</a></li>`;
@@ -568,10 +661,12 @@ async function loadActivityFeed() {
       }
       const h = await handleOfCached(r.to);
       let tier = "";
-      try { tier = await mecha.tierName(await mecha.tierOf(r.id)); } catch { /* best-effort */ }
+      try { tier = await callWithFallback(async (p) => mecha.connect(p).tierName(await mecha.connect(p).tierOf(r.id))); } catch { /* best-effort */ }
       const tc = tier ? TIER_CLASS[["Common", "Rare", "Epic", "Legendary", "Mythic"].indexOf(tier)] || "" : "";
       return `<li><span class="f-ico">🤖</span><span class="f-who">${h ? esc(h) + ".ai" : short(r.to)}</span><span class="f-what">minted Mecha #${String(r.id).padStart(4, "0")}</span>${tier ? `<span class="${tc}">${tier}</span>` : ""}<span class="f-time">${t}</span></li>`;
     }));
+    const items = settled.filter((s) => s.status === "fulfilled").map((s) => s.value);
+    if (!items.length) { showError(); return; }
     ul.innerHTML = items.join("");
     ul.dataset.loaded = "1";
     $("activityUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · refreshes every minute.";
@@ -585,7 +680,7 @@ async function loadRecentTips() {
     if (ul.dataset.loaded !== "1") ul.innerHTML = "<li>Couldn't load recent tips — the BSC RPC is unavailable right now. Try again in a bit.</li>";
   };
   try {
-    const current = await provider.getBlockNumber();
+    const current = await currentBlock();
     const { logs: tips, complete } = await fetchLogsPaged(hub, hub.filters.Tip, "Tip", HUB_DEPLOY_BLOCK, current);
     if (!tips.length) {
       if (complete) { ul.innerHTML = "<li>No tips yet — be the first agent to get paid by name.</li>"; ul.dataset.loaded = "1"; }
@@ -594,11 +689,13 @@ async function loadRecentTips() {
     }
     const top = [...tips].sort((a, b) => b.blockNumber - a.blockNumber || b.index - a.index).slice(0, 6);
     const times = await blockTimes(top.map((e) => e.blockNumber));
-    const items = await Promise.all(top.map(async (ev) => {
+    const settled = await Promise.allSettled(top.map(async (ev) => {
       const toH = await handleOfCached(ev.args.to);
       const t = times.get(ev.blockNumber) ? timeAgo(times.get(ev.blockNumber)) : "";
       return `<li><span class="f-ico">💛</span><span class="f-who">${esc(ev.args.handle)}.ai</span><span class="f-what">→ ${toH ? esc(toH) + ".ai" : short(ev.args.to)}</span><span class="f-amt">${fmtBnb(ev.args.amount)} BNB</span><span class="f-time">${t}</span></li>`;
     }));
+    const items = settled.filter((s) => s.status === "fulfilled").map((s) => s.value);
+    if (!items.length) { showError(); return; }
     ul.innerHTML = items.join("");
     ul.dataset.loaded = "1";
   } catch (e) { console.error(e); showError(); }
@@ -608,19 +705,22 @@ async function loadMechaGallery() {
   const ul = $("latestMecha");
   if (!ul || !mecha) return;
   try {
-    const total = Number(await mecha.totalMinted());
+    const total = Number(await callWithFallback((p) => mecha.connect(p).totalMinted()));
     if (!total) { ul.innerHTML = "<li>No Mecha minted yet — Founding Pass holders mint first.</li>"; return; }
     const ids = [];
     for (let i = total; i >= Math.max(1, total - 5); i--) ids.push(i);
-    const items = await Promise.all(ids.map(async (id) => {
-      const owner = await mecha.ownerOf(id);
+    // allSettled: one flaky owner/tier lookup must never wipe the gallery.
+    const settled = await Promise.allSettled(ids.map(async (id) => {
+      const owner = await callWithFallback((p) => mecha.connect(p).ownerOf(id));
       const [tier, h] = await Promise.all([
-        mecha.tierName(await mecha.tierOf(id)).catch(() => ""),
+        callWithFallback(async (p) => mecha.connect(p).tierName(await mecha.connect(p).tierOf(id))).catch(() => ""),
         handleOfCached(owner),
       ]);
       const tc = tier ? TIER_CLASS[["Common", "Rare", "Epic", "Legendary", "Mythic"].indexOf(tier)] || "" : "";
       return `<li><span class="f-ico">🤖</span><span class="f-who">Mecha #${String(id).padStart(4, "0")}</span>${tier ? `<span class="${tc}">${tier}</span>` : ""}<span class="f-what">owned by ${h ? esc(h) + ".ai" : short(owner)}</span><a class="f-link" href="https://element.market/assets/bsc/${net.mecha}/${id}" target="_blank" rel="noopener">Buy on Element</a></li>`;
     }));
+    const items = settled.filter((s) => s.status === "fulfilled").map((s) => s.value);
+    if (!items.length) throw new Error("all gallery lookups failed");
     ul.innerHTML = items.join("");
     ul.dataset.loaded = "1";
   } catch (e) {
@@ -630,10 +730,14 @@ async function loadMechaGallery() {
 }
 
 async function updateHeroStats() {
-  try {
-    if (pass) $("heroPassTotal").textContent = String(await pass.totalMinted());
-    if (mecha) $("heroMechaTotal").textContent = String(await mecha.totalMinted()) + " / 666";
-  } catch { /* best-effort */ }
+  // Each total is independent: one failing RPC must never blank the other
+  // (the old single try/catch left Mecha as "—" when its call flaked).
+  if (pass) {
+    try { $("heroPassTotal").textContent = String(await callWithFallback((p) => pass.connect(p).totalMinted())); } catch { /* keep previous value */ }
+  }
+  if (mecha) {
+    try { $("heroMechaTotal").textContent = String(await callWithFallback((p) => mecha.connect(p).totalMinted())) + " / 666"; } catch { /* keep previous value */ }
+  }
 }
 
 $("connectBtn").addEventListener("click", connect);
@@ -663,7 +767,10 @@ if (window.ethereum) {
         $("passLink").href = net.explorer + "/address/" + net.pass;
         $("passLink2").href = net.explorer + "/address/" + net.pass;
         $("passCard").classList.remove("hidden");
-        $("passTotal").textContent = String(await pass.totalMinted());
+        // Independent try/catch per read: one flaky RPC must never kill the
+        // rest of the preview (the old straight awaits aborted the whole
+        // init block on the first failure).
+        try { $("passTotal").textContent = String(await callWithFallback((p) => pass.connect(p).totalMinted())); } catch { $("passTotal").textContent = "—"; }
         $("passStatus").textContent = "Connect wallet to mint";
         $("mintPassBtn").disabled = false;
         $("mintPassBtn").textContent = "Connect wallet to mint";
@@ -672,7 +779,7 @@ if (window.ethereum) {
         mecha = new ethers.Contract(net.mecha, MECHA_ABI, provider);
         $("mechaLink").href = net.explorer + "/address/" + net.mecha;
         $("mechaLink2").href = net.explorer + "/address/" + net.mecha;
-        $("mechaTotal").textContent = String(await mecha.totalMinted()) + " / 666";
+        try { $("mechaTotal").textContent = String(await callWithFallback((p) => mecha.connect(p).totalMinted())) + " / 666"; } catch { $("mechaTotal").textContent = "—"; }
         $("mechaStatus").textContent = "Connect wallet to mint";
         $("mintMechaBtn").disabled = false;
         $("mintMechaBtn").textContent = "Connect wallet to mint";
