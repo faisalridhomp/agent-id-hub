@@ -492,10 +492,18 @@ async function fetchLogsPagedInner(contract, filter, eventName, fromBlock, toBlo
   const key = logCacheKey(contract, eventName);
   let cache = readLogCache(key) || { coveredTo: fromBlock - 1, events: [] };
   const snap = await seedCacheFromSnapshot(contract, eventName);
-  if (snap && snap.coveredTo > cache.coveredTo) {
+  // Always union the snapshot into the cache, even when the cached
+  // coveredTo is already ahead of it. A cache written with coveredTo high
+  // but events empty (a delta fetch that advanced coveredTo while the
+  // snapshot seed failed, or a stale/partial write) would otherwise stay
+  // empty forever: the old `snap.coveredTo > cache.coveredTo` guard
+  // skipped the merge, the delta returned nothing new, and the section
+  // rendered a false "no events yet" state. The byId union dedups by
+  // block:index, so merging is always safe.
+  if (snap) {
     const byId = new Map(cache.events.map((e) => [e.b + ":" + e.i, e]));
     for (const e of snap.events) byId.set(e.b + ":" + e.i, e);
-    cache = { coveredTo: snap.coveredTo, events: [...byId.values()] };
+    cache = { coveredTo: Math.max(cache.coveredTo, snap.coveredTo), events: [...byId.values()] };
   }
   const byId = new Map(cache.events.map((e) => [e.b + ":" + e.i, e]));
   const start = Math.max(fromBlock, cache.coveredTo + 1);
